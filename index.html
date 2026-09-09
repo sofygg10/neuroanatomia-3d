@@ -1,0 +1,811 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NeuroLab 3D · Atlas de neuroanatomía interactivo</title>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<style>
+  :root{
+    --bg0:#070b16; --bg1:#0e1526; --bg2:#141d33;
+    --glass:rgba(16,23,42,.82); --glass2:rgba(20,29,51,.7);
+    --stroke:rgba(120,150,220,.18);
+    --txt:#e8ecf6; --muted:#9aa8c7; --muted2:#6f7f9f;
+    --accent:#5b8cff; --accent2:#7c5cff;
+    --ok:#3ddc97; --bad:#ff6b6b;
+    --shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    color:var(--txt);
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+    background:
+      radial-gradient(1100px 700px at 80% -8%, rgba(92,124,255,.18), transparent 60%),
+      radial-gradient(900px 600px at 5% 110%, rgba(124,92,255,.16), transparent 55%),
+      linear-gradient(160deg,var(--bg0),var(--bg1) 60%,var(--bg2));
+    overflow:hidden;
+  }
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(120,150,220,.28);border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  header{
+    position:relative; z-index:30; display:flex; align-items:center; gap:16px;
+    padding:11px 18px; background:rgba(8,12,22,.6);
+    border-bottom:1px solid var(--stroke); backdrop-filter:blur(10px);
+  }
+  .logo{display:flex;align-items:center;gap:11px;font-weight:700}
+  .logo .mark{width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;font-size:19px;box-shadow:0 6px 18px rgba(91,140,255,.5)}
+  .logo small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+  .tabs{display:flex;gap:6px;background:rgba(255,255,255,.04);padding:4px;border-radius:12px;border:1px solid var(--stroke)}
+  .tab{border:none;cursor:pointer;color:var(--muted);background:transparent;padding:8px 15px;border-radius:9px;font-size:13.5px;font-weight:600;transition:.18s}
+  .tab:hover{color:var(--txt)}
+  .tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 6px 16px rgba(91,140,255,.4)}
+  header .spacer{flex:1}
+  .counter{color:var(--muted2);font-size:12.5px}
+  .counter b{color:var(--accent)}
+
+  main{position:relative;height:calc(100vh - 58px)}
+  .view{position:absolute;inset:0;display:none}
+  .view.active{display:block}
+
+  /* ---------------- 3D ---------------- */
+  #stage{display:grid;grid-template-columns:1fr 384px;height:100%}
+  #canvasWrap{position:relative;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;cursor:grab}
+  canvas:active{cursor:grabbing}
+
+  #labels{position:absolute;inset:0;pointer-events:none;z-index:4}
+  .lbl3d{position:absolute;transform:translate(-50%,-50%);
+    background:rgba(8,12,22,.78);border:1px solid var(--stroke);
+    padding:2px 8px;border-radius:7px;font-size:11px;font-weight:600;white-space:nowrap;
+    color:#dfe6f6;box-shadow:0 3px 10px rgba(0,0,0,.4)}
+
+  .tooltip{position:absolute;pointer-events:none;z-index:6;
+    background:rgba(8,12,22,.92);border:1px solid var(--stroke);
+    padding:5px 10px;border-radius:8px;font-size:12.5px;font-weight:600;
+    transform:translate(-50%,-150%);white-space:nowrap;opacity:0;transition:opacity .12s;
+    box-shadow:0 6px 20px rgba(0,0,0,.5)}
+
+  .controls{position:absolute;left:14px;right:14px;bottom:14px;z-index:8;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    background:var(--glass);border:1px solid var(--stroke);border-radius:16px;
+    padding:11px 15px;backdrop-filter:blur(14px);box-shadow:var(--shadow)}
+  .cg{display:flex;align-items:center;gap:9px}
+  .cg-label{font-size:11.5px;color:var(--muted);white-space:nowrap;font-weight:600}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:5px;width:130px;border-radius:999px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:#fff;border:3px solid var(--accent);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .btn{border:1px solid var(--stroke);background:rgba(255,255,255,.05);color:var(--txt);
+    padding:8px 13px;border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:600;transition:.16s;white-space:nowrap}
+  .btn:hover{background:rgba(255,255,255,.12);transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+  .btn.active{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+  .btn.sm{padding:6px 10px;font-size:12px}
+  select{background:rgba(255,255,255,.06);color:var(--txt);border:1px solid var(--stroke);
+    border-radius:9px;padding:7px 9px;font-size:12.5px;font-weight:600;cursor:pointer;outline:none}
+  select option{background:#141d33}
+
+  .sep{width:1px;height:26px;background:var(--stroke)}
+
+  /* ---- ficha flotante ---- */
+  .fichaCard{position:absolute;left:14px;bottom:74px;z-index:9;width:min(420px,calc(100% - 28px));
+    background:var(--glass);border:1px solid var(--stroke);border-radius:16px;
+    padding:16px 18px;backdrop-filter:blur(16px);box-shadow:var(--shadow);
+    transform:translateY(12px);opacity:0;pointer-events:none;transition:.22s}
+  .fichaCard.show{transform:translateY(0);opacity:1;pointer-events:auto}
+  .fichaCard .x{position:absolute;top:11px;right:12px;cursor:pointer;color:var(--muted);
+    border:none;background:transparent;font-size:20px;line-height:1;padding:2px 6px;border-radius:7px}
+  .fichaCard .x:hover{color:var(--txt);background:rgba(255,255,255,.08)}
+  .fichaCard h3{margin:0 5px 6px 0;font-size:19px;padding-right:22px}
+  .catbadge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:999px;text-transform:uppercase;margin-bottom:10px}
+  .fblock{margin:11px 0}
+  .fblock .l{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.4px;
+    text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .fblock p{margin:0;line-height:1.5;font-size:13.5px;color:#dbe2f2}
+  .fblock.les{background:rgba(255,107,107,.09);border:1px solid rgba(255,107,107,.24);border-radius:11px;padding:9px 12px}
+  .fblock.les .l{color:#ff9a9a}
+  .fichaActions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+  /* región overview chips */
+  .regchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .rchip{border:1px solid var(--stroke);background:rgba(255,255,255,.04);color:var(--txt);
+    border-radius:8px;padding:5px 9px;font-size:12px;cursor:pointer;font-weight:600;transition:.14s}
+  .rchip:hover{background:rgba(91,140,255,.18);border-color:var(--accent)}
+
+  /* ---------------- Atlas sidebar ---------------- */
+  aside{background:rgba(9,13,24,.66);border-left:1px solid var(--stroke);backdrop-filter:blur(12px);
+    display:flex;flex-direction:column;min-height:0}
+  .atlasHead{padding:14px 15px 10px}
+  .searchbox{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);
+    border:1px solid var(--stroke);border-radius:11px;padding:8px 11px;margin-bottom:10px}
+  .searchbox input{border:none;background:transparent;color:var(--txt);outline:none;width:100%;font-size:14px}
+  .searchbox input::placeholder{color:var(--muted2)}
+  .filters{display:flex;flex-wrap:wrap;gap:6px}
+  .fchip{border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--muted);
+    border-radius:999px;padding:5px 11px;font-size:11.5px;cursor:pointer;font-weight:600;transition:.14s;display:flex;align-items:center;gap:6px}
+  .fchip:hover{color:var(--txt)}
+  .fchip.on{color:#fff;border-color:transparent}
+  .fchip .d{width:9px;height:9px;border-radius:3px}
+  .listMeta{padding:4px 15px 8px;color:var(--muted2);font-size:12px;display:flex;justify-content:space-between;align-items:center}
+  .listMeta a{color:var(--accent);cursor:pointer;text-decoration:none}
+  .list{flex:1;overflow-y:auto;padding:0 10px 16px}
+  .row{display:flex;align-items:center;gap:10px;border:1px solid transparent;
+    border-radius:10px;padding:8px 10px;cursor:pointer;transition:.13s}
+  .row:hover{background:rgba(255,255,255,.06)}
+  .row.sel{background:rgba(91,140,255,.16);border-color:var(--accent)}
+  .row .d{width:11px;height:11px;border-radius:4px;flex:none}
+  .row .nm{font-size:13.5px;font-weight:600;line-height:1.25}
+  .row .sub{font-size:11px;color:var(--muted2)}
+  .groupHdr{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);
+    margin:14px 8px 6px;font-weight:700}
+
+  /* ---------------- Quiz ---------------- */
+  #quiz{height:100%;overflow-y:auto;display:grid;place-items:start center;padding:30px 18px}
+  .qCard{width:min(700px,100%);background:var(--glass);border:1px solid var(--stroke);
+    border-radius:20px;padding:28px;box-shadow:var(--shadow);backdrop-filter:blur(14px)}
+  .qCard h2{margin:0 0 4px}
+  .qCard .lede{color:var(--muted);line-height:1.6;margin:0 0 20px;font-size:14.5px}
+  .setup .field{margin:16px 0}
+  .setup .field > span{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:9px;font-weight:700}
+  .pills{display:flex;flex-wrap:wrap;gap:8px}
+  .pill{border:1px solid var(--stroke);background:rgba(255,255,255,.04);color:var(--txt);
+    border-radius:10px;padding:9px 15px;cursor:pointer;font-size:13.5px;font-weight:600;transition:.14s}
+  .pill:hover{background:rgba(255,255,255,.09)}
+  .pill.on{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+  .startBtn{margin-top:24px;width:100%;padding:15px;font-size:16px}
+
+  .quizTop{display:flex;justify-content:space-between;align-items:center}
+  .qcount{color:var(--muted);font-size:13px;font-weight:600}
+  .qscore{color:var(--accent);font-weight:700}
+  .progress{height:7px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden;margin:13px 0 20px}
+  .progress > i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .35s}
+  .qtype{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);font-weight:700;margin-bottom:8px}
+  .question{font-size:19px;font-weight:700;line-height:1.4;margin-bottom:20px}
+  .question .hl{color:var(--accent)}
+  .options{display:flex;flex-direction:column;gap:10px}
+  .opt{text-align:left;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--txt);
+    padding:14px 16px;border-radius:13px;cursor:pointer;font-size:14.5px;transition:.14s;display:flex;align-items:center;gap:12px;line-height:1.4}
+  .opt:hover:not(:disabled){background:rgba(255,255,255,.09);border-color:var(--accent)}
+  .opt .mk{width:26px;height:26px;border-radius:8px;border:1px solid var(--stroke);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none;color:var(--muted)}
+  .opt.correct{border-color:var(--ok);background:rgba(61,220,151,.14)}
+  .opt.correct .mk{background:var(--ok);color:#04231a;border-color:var(--ok)}
+  .opt.wrong{border-color:var(--bad);background:rgba(255,107,107,.14)}
+  .opt.wrong .mk{background:var(--bad);color:#2a0808;border-color:var(--bad)}
+  .opt:disabled{cursor:default}
+  .explain{margin-top:18px;border-radius:13px;padding:14px 16px;line-height:1.55;font-size:13.5px;display:none}
+  .explain.show{display:block}
+  .explain.ok{background:rgba(61,220,151,.1);border:1px solid rgba(61,220,151,.3)}
+  .explain.no{background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3)}
+  .quizNav{display:flex;justify-content:space-between;margin-top:20px;gap:10px}
+  .result{text-align:center}
+  .result .big{font-size:54px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin:8px 0}
+  .review{text-align:left;margin-top:20px;max-height:260px;overflow-y:auto}
+  .review .ri{border-top:1px solid var(--stroke);padding:10px 2px;font-size:13px;line-height:1.45}
+  .review .ri b{color:#ffb4b4}
+
+  #overlay{position:absolute;inset:0;z-index:50;display:grid;place-items:center;
+    background:rgba(7,11,22,.9);backdrop-filter:blur(6px);text-align:center;padding:24px}
+  .spinner{width:46px;height:46px;border-radius:50%;border:4px solid rgba(255,255,255,.12);
+    border-top-color:var(--accent);margin:0 auto 18px;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #overlay h3{margin:0 0 8px}#overlay p{color:var(--muted);line-height:1.6;margin:0;max-width:440px}
+
+  @media (max-width:900px){
+    #stage{grid-template-columns:1fr;grid-template-rows:54% 46%}
+    aside{border-left:none;border-top:1px solid var(--stroke)}
+    .fichaCard{bottom:auto;top:12px}
+    .counter{display:none}
+    input[type=range]{width:96px}
+  }
+</style>
+
+<header>
+  <div class="logo">
+    <div class="mark">🧠</div>
+    <div>NeuroLab 3D <small>Atlas de neuroanatomía · psicología</small></div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-view="stage">🧩 Explorar 3D</button>
+    <button class="tab" data-view="quiz">📝 Quiz</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="counter"><b id="cnt">0</b> estructuras · arrastra para girar · clic para explorar</div>
+</header>
+
+<main>
+  <!-- ============ 3D ============ -->
+  <section class="view active" data-view="stage">
+    <div id="stage">
+      <div id="canvasWrap">
+        <div id="labels"></div>
+        <div id="tooltip" class="tooltip"></div>
+
+        <div id="fichaCard" class="fichaCard"></div>
+
+        <div class="controls">
+          <div class="cg">
+            <span class="cg-label">🧩 Desarmar</span>
+            <input id="explode" type="range" min="0" max="100" value="0" />
+          </div>
+          <button id="btnArmar" class="btn sm">Armar</button>
+          <button id="btnDesarmar" class="btn sm primary">Desarmar</button>
+          <div class="sep"></div>
+          <div class="cg">
+            <span class="cg-label">🔪 Corte</span>
+            <select id="clipAxis" title="Plano de corte">
+              <option value="x">Sagital</option>
+              <option value="z">Coronal</option>
+              <option value="y">Axial</option>
+            </select>
+            <input id="clip" type="range" min="0" max="100" value="100" />
+          </div>
+          <div class="sep"></div>
+          <button id="btnLabels" class="btn sm">🏷️ Etiquetas</button>
+          <button id="btnSpin" class="btn sm">🔄 Girar</button>
+          <button id="btnReset" class="btn sm">🎯 Vista</button>
+        </div>
+
+        <div id="overlay">
+          <div>
+            <div class="spinner" id="spin"></div>
+            <h3 id="ovTitle">Cargando el cerebro 3D…</h3>
+            <p id="ovText">Preparando el motor gráfico (Three.js). Requiere internet la primera vez.</p>
+          </div>
+        </div>
+      </div>
+
+      <aside>
+        <div class="atlasHead">
+          <div class="searchbox">
+            <span>🔍</span>
+            <input id="search" type="text" placeholder="Buscar estructura… (ej. hipocampo, área 4)" />
+          </div>
+          <div class="filters" id="filters"></div>
+        </div>
+        <div class="listMeta">
+          <span id="listCount">—</span>
+          <a id="clearFilters">Ver todas</a>
+        </div>
+        <div class="list" id="list"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <section class="view" data-view="quiz">
+    <div id="quiz"></div>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================================================
+   BASE DE DATOS (inyectada desde el Excel)
+   ============================================================ */
+const STRUCTURES = [{"id":"area-4-motora-primaria","name":"Área 4 de Brodmann (Motora Primaria)","cat":"corteza","region3d":"frontal","def":"Franja de la circunvolución precentral del lóbulo frontal, justo delante del surco central.","fun":"Ejecuta el movimiento voluntario: envía las órdenes motoras al cuerpo mediante la vía piramidal, organizada somatotópicamente (homúnculo motor).","les":"Parálisis o paresia contralateral y pérdida de motricidad fina en la parte del cuerpo representada en la zona dañada."},{"id":"area-6-premotora","name":"Área 6 (Premotora)","cat":"corteza","region3d":"frontal","def":"Región del lóbulo frontal situada por delante de la corteza motora primaria, en la cara lateral del hemisferio.","fun":"Planifica y prepara los movimientos guiados por estímulos externos, seleccionando patrones motores y ajustando la postura antes de la ejecución.","les":"Apraxia y dificultad para organizar secuencias motoras complejas, con torpeza en movimientos dirigidos por señales del entorno."},{"id":"area-motora-suplementaria-ams","name":"Área Motora Suplementaria (AMS)","cat":"corteza","region3d":"frontal","def":"Parte medial del área 6, en la cara interna del lóbulo frontal, por delante de la corteza motora primaria.","fun":"Planifica y programa secuencias motoras generadas internamente y coordina movimientos bimanuales, contribuyendo a la iniciación voluntaria del movimiento.","les":"Mutismo acinético transitorio, dificultad para iniciar movimientos autogenerados y aparición del síndrome de la mano ajena."},{"id":"campo-ocular-frontal-area-8","name":"Campo Ocular Frontal (Área 8)","cat":"corteza","region3d":"frontal","def":"Región del lóbulo frontal, por delante del área premotora, correspondiente al área 8 de Brodmann.","fun":"Controla los movimientos sacádicos voluntarios de los ojos y la atención visual, dirigiendo la mirada hacia el lado contralateral.","les":"Desviación conjugada de los ojos hacia el lado de la lesión y dificultad para dirigir la mirada voluntariamente hacia el lado opuesto."},{"id":"area-de-broca-44-y-45","name":"Área de Broca (44 y 45)","cat":"corteza","region3d":"frontal","def":"Circunvolución frontal inferior del hemisferio dominante (habitualmente el izquierdo), áreas 44 y 45 de Brodmann.","fun":"Interviene en la producción del lenguaje, organizando la programación motora del habla y los aspectos gramaticales de la expresión.","les":"Afasia de Broca (no fluente): lenguaje lento, agramatical y con esfuerzo pero comprensión relativamente conservada, descrita por Paul Broca en el caso 'Tan'."},{"id":"polo-frontal-area-10","name":"Polo Frontal  Área 10)","cat":"corteza","region3d":"frontal","def":"Extremo más anterior del lóbulo frontal, correspondiente al área 10 de Brodmann.","fun":"Sostiene las funciones cognitivas más abstractas: multitarea, metacognición, planificación prospectiva y coordinación de objetivos simultáneos.","les":"Deterioro de la planificación a largo plazo, dificultad para gestionar varias tareas y alteración del comportamiento dirigido a metas."},{"id":"corteza-prefrontal-dorsolateral-cpfdl","name":"Corteza Prefrontal Dorsolateral (CPFDL)","cat":"corteza","region3d":"frontal","def":"Región superior y lateral de la corteza prefrontal, en la cara externa del lóbulo frontal.","fun":"Núcleo de las funciones ejecutivas: memoria de trabajo, planificación, flexibilidad cognitiva, razonamiento e inhibición de respuestas.","les":"Síndrome disejecutivo: perseveración, escasa planificación, rigidez cognitiva y dificultad en la memoria de trabajo."},{"id":"corteza-orbitofrontal-cof","name":"Corteza Orbitofrontal (COF)","cat":"corteza","region3d":"frontal","def":"Parte ventral de la corteza prefrontal, situada sobre las órbitas oculares en la base del lóbulo frontal.","fun":"Regula la toma de decisiones basada en recompensa y castigo, el control de impulsos y la conducta social adaptativa.","les":"Desinhibición, impulsividad, conducta socialmente inapropiada y mal juicio, como ilustra el caso clásico de Phineas Gage."},{"id":"corteza-ventromedial","name":"Corteza Ventromedial","cat":"corteza","region3d":"frontal","def":"Región inferior y medial de la corteza prefrontal, en la cara interna del lóbulo frontal.","fun":"Integra emoción y cognición en la toma de decisiones, asignando valor afectivo a las opciones (marcadores somáticos) y regulando la conducta emocional.","les":"Decisiones desventajosas pese a un intelecto conservado, embotamiento emocional y dificultad para anticipar consecuencias, estudiado por Damasio."},{"id":"corteza-cingulada-anterior","name":"Corteza Cingulada anterior","cat":"corteza","region3d":"cingulado","def":"Parte frontal de la circunvolución del cíngulo, que rodea la rodilla del cuerpo calloso en la cara medial del hemisferio.","fun":"Detecta conflictos y errores, regula la atención, la motivación y el procesamiento del dolor emocional, enlazando emoción y control cognitivo.","les":"Apatía, mutismo acinético, reducción de la iniciativa y déficits en el control atencional y la monitorización del error."},{"id":"corteza-cingulada-posterior","name":"Corteza Cingulada Posterior","cat":"corteza","region3d":"cingulado","def":"Parte posterior de la circunvolución del cíngulo, por detrás de la cingulada anterior en la cara medial del hemisferio.","fun":"Nodo central de la red neuronal por defecto: participa en la memoria autobiográfica, la autorreferencia y la orientación espacial.","les":"Alteraciones de la memoria episódica y de la conciencia autorreferencial; es una de las primeras zonas afectadas en la enfermedad de Alzheimer."},{"id":"precuneo","name":"Precúneo","cat":"corteza","region3d":"parietal","def":"Región de la cara medial del lóbulo parietal, entre la cuña occipital y el lobulillo paracentral.","fun":"Participa en las imágenes mentales visuoespaciales, la memoria episódica, la autoconciencia y la integración de la red neuronal por defecto.","les":"Déficits en la memoria episódica, la orientación espacial y la conciencia de uno mismo, con implicación temprana en procesos neurodegenerativos."},{"id":"corteza-somatosensorial-primaria","name":"Corteza Somatosensorial Primaria","cat":"corteza","region3d":"parietal","def":"Giro postcentral del lóbulo parietal (áreas 3, 1 y 2 de Brodmann), justo detrás del surco central; recibe las aferencias somatosensoriales del núcleo ventral posterior del tálamo.","fun":"Procesa el tacto discriminativo, la presión, la vibración y la propiocepción del hemicuerpo contralateral, organizados somatotópicamente en el homúnculo sensitivo.","les":"Hipoestesia o anestesia contralateral con pérdida del tacto fino, la discriminación de dos puntos y la propiocepción; puede aparecer astereognosia."},{"id":"corteza-somatosensorial-secundaria","name":"Corteza Somatosensorial Secundaria","cat":"corteza","region3d":"parietal","def":"Región situada en el opérculo parietal, sobre el borde superior de la cisura de Silvio, adyacente a la corteza somatosensorial primaria.","fun":"Integra la información táctil bilateral y participa en el reconocimiento de texturas, la memoria táctil y la atención sensorial; contribuye al procesamiento del dolor.","les":"Déficits en el reconocimiento táctil de objetos y en la integración sensorial compleja, con alteración de la estereognosia."},{"id":"corteza-parietal-posterior","name":"Corteza Parietal Posterior","cat":"corteza","region3d":"parietal","def":"Porción posterior del lóbulo parietal, por detrás de la corteza somatosensorial primaria, que abarca los lóbulos parietales superior e inferior.","fun":"Corteza asociativa multimodal clave para la integración visuoespacial, la atención espacial, la coordinación visuomotora y la representación del espacio corporal y extrapersonal.","les":"Heminegligencia espacial (más frecuente en lesiones derechas), apraxias y el síndrome de Bálint; en el hemisferio izquierdo, síndrome de Gerstmann."},{"id":"lobulo-parietal-superior-areas-5-7","name":"Lóbulo Parietal Superior (Áreas 5 y 7)","cat":"corteza","region3d":"parietal","def":"Región dorsal del lóbulo parietal por encima del surco intraparietal, correspondiente a las áreas 5 y 7 de Brodmann.","fun":"Integra la información somatosensorial y visual para guiar el movimiento, planificar el alcance y la manipulación de objetos y mantener el esquema corporal (vía dorsal del 'dónde/cómo').","les":"Alteraciones de la coordinación visuomotora, ataxia óptica y dificultades para el alcance y la manipulación de objetos en el espacio."},{"id":"operculo-parietal","name":"Opérculo Parietal","cat":"corteza","region3d":"parietal","def":"Porción del lóbulo parietal que cubre la parte superior de la ínsula sobre la cisura de Silvio, donde se aloja la corteza somatosensorial secundaria.","fun":"Participa en el procesamiento somatosensorial de orden superior, la percepción del dolor, la integración táctil bilateral y la interocepción.","les":"Déficits en la discriminación táctil compleja y en la percepción del dolor; puede contribuir a síndromes dolorosos y a alteraciones de la conciencia corporal."},{"id":"corteza-visual-primaria-v1","name":"Corteza Visual Primaria (V1/Área 17)","cat":"corteza","region3d":"occipital","def":"Corteza del polo occipital, a ambos lados de la cisura calcarina; recibe las aferencias del núcleo geniculado lateral.","fun":"Primer procesamiento cortical de la visión: detecta orientación, bordes, contraste y disparidad binocular.","les":"Ceguera cortical o escotomas contralaterales; el paciente puede no reconocer su ceguera (síndrome de Anton) en lesiones bilaterales."},{"id":"corteza-visual-secundaria-v2","name":"Corteza Visual Secundaria (V2/Área 18)","cat":"corteza","region3d":"occipital","def":"Corteza occipital que rodea a V1 (área 18 de Brodmann), segundo escalón del procesamiento visual cortical.","fun":"Elabora la información de V1 procesando contornos ilusorios, la figura-fondo, la profundidad y patrones más complejos de forma y color, distribuyéndola a las vías dorsal y ventral.","les":"Alteraciones de la percepción de formas, contornos y profundidad, con déficits visuales complejos pese a una agudeza básica conservada."},{"id":"area-v3-visual-terciaria","name":"Área V3 (Visual Terciaria)","cat":"corteza","region3d":"occipital","def":"Región visual extraestriada situada por delante de V2, en la corteza occipital, en la transición hacia las áreas parietales.","fun":"Procesa la forma dinámica y global de los objetos y el movimiento coherente, integrando forma y desplazamiento; se asocia a la vía dorsal.","les":"Déficits en la percepción de la forma en movimiento y en la integración de contornos dinámicos."},{"id":"area-v4","name":"Área V4","cat":"corteza","region3d":"occipital","def":"Área visual extraestriada de la corteza occipitotemporal ventral, componente principal de la vía ventral del color y la forma.","fun":"Procesa el color y la forma compleja de los objetos, contribuyendo a la constancia del color y al reconocimiento de patrones.","les":"Acromatopsia cerebral (pérdida de la visión del color por daño cerebral) y dificultades en la discriminación de formas complejas."},{"id":"area-v5","name":"Área V5","cat":"corteza","region3d":"occipital","def":"Área visual extraestriada situada en la unión occipitotemporal (también llamada MT/V5), en el borde del lóbulo occipital.","fun":"Procesa el movimiento visual: dirección, velocidad y flujo óptico; esencial para la persecución ocular y la percepción del desplazamiento.","les":"Akinetopsia: incapacidad para percibir el movimiento, viendo la realidad como una secuencia de imágenes estáticas."},{"id":"corteza-auditiva-primaria-area-41","name":"Corteza Auditiva Primaria (Área 41)","cat":"corteza","region3d":"temporal","def":"Giro temporal transverso (de Heschl) en la cara superior del lóbulo temporal (área 41 de Brodmann); recibe las aferencias del cuerpo geniculado medial.","fun":"Primer procesamiento cortical del sonido: codifica frecuencia (organización tonotópica), intensidad y localización temporal del estímulo auditivo.","les":"Su lesión unilateral causa déficits sutiles; la afectación bilateral puede producir sordera cortical con audiometría periférica conservada."},{"id":"corteza-auditiva-secundaria-area-42","name":"Corteza Auditiva Secundaria (Área 42)","cat":"corteza","region3d":"temporal","def":"Corteza auditiva asociativa que rodea al área 41 en el giro temporal superior (área 42 de Brodmann).","fun":"Integra y analiza patrones auditivos complejos como el timbre, la melodía y los sonidos del habla, dando significado perceptivo al sonido.","les":"Agnosia auditiva: dificultad para reconocer e identificar sonidos y palabras pese a una audición básica preservada; puede incluir amusia."},{"id":"area-de-wernicke-area-22-posterior","name":"Área de Wernicke (Área 22 posterior)","cat":"corteza","region3d":"temporal","def":"Porción posterior del giro temporal superior del hemisferio dominante (habitualmente el izquierdo), en el área 22 de Brodmann, junto a la corteza auditiva.","fun":"Centro de la comprensión del lenguaje: procesa el significado de las palabras habladas y escritas y participa en la selección léxica.","les":"Afasia de Wernicke: lenguaje fluente pero vacío, con parafasias y jergafasia, comprensión gravemente alterada y anosognosia del déficit."},{"id":"insula-anterior","name":"Ínsula Anterior","cat":"corteza","region3d":"insula","def":"Porción anterior de la corteza insular, oculta en el fondo de la cisura de Silvio bajo los opérculos frontal, parietal y temporal.","fun":"Sustrato de la interocepción consciente, la conciencia emocional, la empatía, el asco y la toma de decisiones; nodo clave de la red de saliencia.","les":"Alteraciones de la conciencia emocional e interoceptiva, embotamiento del asco, déficits de empatía y desregulación autonómica."},{"id":"insula-posterior","name":"Ínsula Posterior","cat":"corteza","region3d":"insula","def":"Porción posterior de la corteza insular, en el fondo de la cisura de Silvio, con conexiones somatosensoriales y viscerales.","fun":"Procesa la interocepción primaria: señales viscerales, dolor, temperatura, tacto y estado corporal, aportando el mapa sensorial del cuerpo.","les":"Déficits en la percepción del dolor y la temperatura y alteraciones de la conciencia corporal; puede contribuir a síndromes dolorosos centrales."},{"id":"giro-angular-39","name":"Giro Angular (Área 39)","cat":"giros","region3d":"parietal","def":"Circunvolución del lóbulo parietal inferior que rodea el extremo posterior del surco temporal superior, en torno al área 39 de Brodmann.","fun":"Integración multimodal del lenguaje; interviene en la lectura, la escritura, el cálculo y la comprensión semántica y metafórica.","les":"Su lesión (típicamente izquierda) causa el síndrome de Gerstmann: agrafia, acalculia, agnosia digital y desorientación izquierda-derecha, con alexia asociada."},{"id":"giro-supramarginal-40","name":"Giro Supramarginal (Área 40)","cat":"giros","region3d":"parietal","def":"Circunvolución del lóbulo parietal inferior que rodea el extremo posterior del surco lateral (de Silvio), correspondiente al área 40 de Brodmann.","fun":"Procesamiento fonológico y de la memoria verbal a corto plazo; integra información somatosensorial y participa en el control del gesto.","les":"Su lesión izquierda produce afasia de conducción (repetición alterada con habla fluida) y puede causar apraxia ideomotora."},{"id":"giro-precentral","name":"Giro Precentral","cat":"giros","region3d":"frontal","def":"Circunvolución del lóbulo frontal situada por delante del surco central, que aloja la corteza motora primaria (área 4).","fun":"Origen de la vía piramidal; genera y ejecuta los movimientos voluntarios del lado contralateral del cuerpo, organizados somatotópicamente en el homúnculo motor.","les":"Su lesión provoca hemiparesia o hemiplejía contralateral con debilidad de los músculos representados en la zona dañada."},{"id":"giro-fusiforme-37","name":"Giro Fusiforme (Área 37)","cat":"giros","region3d":"temporal","def":"Circunvolución de la cara inferior del lóbulo temporal, entre los giros lingual y temporal inferior.","fun":"Reconocimiento de patrones visuales complejos; alberga el área fusiforme de las caras (FFA) y contribuye al reconocimiento de palabras.","les":"Prosopagnosia (incapacidad para reconocer rostros) y alteraciones del reconocimiento de objetos o palabras."},{"id":"giro-lingual","name":"Giro Lingual","cat":"giros","region3d":"occipital","def":"Circunvolución de la cara medial e inferior del lóbulo occipital, situada por debajo del surco calcarino y por encima del giro fusiforme.","fun":"Procesamiento visual, especialmente del campo visual superior contralateral; participa en el reconocimiento de la palabra escrita y en el procesamiento del color.","les":"Su lesión puede causar hemianopsia del cuadrante superior contralateral y, si es izquierda, contribuir a la alexia."},{"id":"giro-temporal-superior","name":"Giro Temporal Superior","cat":"giros","region3d":"temporal","def":"Circunvolución más superior del lóbulo temporal, limitada por el surco lateral y el surco temporal superior, que aloja la corteza auditiva primaria y el área de Wernicke.","fun":"Procesamiento auditivo y, en su porción posterior izquierda, comprensión del lenguaje hablado.","les":"Su lesión posterior izquierda produce afasia de Wernicke (comprensión alterada con habla fluida pero sin sentido) y déficits auditivos."},{"id":"giro-temporal-medio","name":"Giro Temporal Medio","cat":"giros","region3d":"temporal","def":"Circunvolución del lóbulo temporal situada entre los surcos temporal superior e inferior.","fun":"Interviene en la memoria semántica, el reconocimiento de rostros y significados, la percepción del movimiento visual y el procesamiento del lenguaje.","les":"Su lesión puede provocar déficits en el acceso al significado de las palabras (afasia anómica o semántica) y alteraciones del reconocimiento."},{"id":"giro-temporal-inferior","name":"Giro Temporal Inferior","cat":"giros","region3d":"temporal","def":"Circunvolución más inferior del lóbulo temporal, por debajo del surco temporal inferior, que forma parte de la vía visual ventral.","fun":"Reconocimiento visual de objetos, formas y patrones complejos como etapa superior del procesamiento visual del 'qué'.","les":"Su lesión causa agnosia visual, con dificultad para identificar objetos pese a una visión sensorial conservada."},{"id":"surco-frontal-superior","name":"Surco Frontal Superior","cat":"giros","region3d":"frontal","def":"Surco de la cara lateral del lóbulo frontal que separa el giro frontal superior del giro frontal medio.","fun":"Su borde posterior contiene los campos oculares frontales, implicados en los movimientos oculares voluntarios y en la memoria de trabajo espacial.","les":"Las lesiones adyacentes pueden alterar el control de los movimientos sacádicos y la atención espacial."},{"id":"surco-frontal-inferior","name":"Surco Frontal Inferior","cat":"giros","region3d":"frontal","def":"Surco de la cara lateral del lóbulo frontal que separa el giro frontal medio del giro frontal inferior.","fun":"Sirve de referencia anatómica del giro frontal inferior (área de Broca en el hemisferio izquierdo) y se asocia al control atencional y la memoria de trabajo.","les":"Las lesiones adyacentes que afectan al giro frontal inferior izquierdo pueden producir afasia de Broca (habla no fluida)."},{"id":"surco-intraparietal","name":"Surco Intraparietal","cat":"giros","region3d":"parietal","def":"Surco de la cara lateral del lóbulo parietal que separa el lóbulo parietal superior del inferior y discurre en sentido anteroposterior.","fun":"Sus áreas integran información visuomotora para la atención espacial, el alcance, la prensión y el procesamiento numérico.","les":"Su lesión puede provocar apraxia óptica, ataxia óptica, negligencia espacial y acalculia."},{"id":"nucleo-caudado","name":"Núcleo Caudado","cat":"ganglios","region3d":"ganglios","def":"Núcleo con forma de C de los ganglios basales que rodea al tálamo, formado por cabeza, cuerpo y cola.","fun":"Integra información cognitiva y motora en circuitos frontoestriatales; participa en el aprendizaje asociativo, la planificación de conductas dirigidas a metas y el control ejecutivo.","les":"Su degeneración es característica de la enfermedad de Huntington (corea, deterioro cognitivo y trastornos psiquiátricos) y su disfunción se asocia al trastorno obsesivo-compulsivo."},{"id":"putamen","name":"Putamen","cat":"ganglios","region3d":"ganglios","def":"Núcleo lateral de los ganglios basales que, junto al globo pálido, forma el núcleo lenticular.","fun":"Componente motor del cuerpo estriado; procesa el circuito sensoriomotor para la ejecución, regulación y automatización de movimientos y hábitos aprendidos.","les":"Su lesión provoca alteraciones del movimiento como hemibalismo o distonía y contribuye a la rigidez y bradicinesia de los síndromes parkinsonianos."},{"id":"globo-palido-externo","name":"Globo Pálido Externo","cat":"ganglios","region3d":"ganglios","def":"Segmento lateral del globo pálido, estación intermedia de la vía indirecta de los ganglios basales.","fun":"Inhibe tónicamente al núcleo subtalámico; su modulación regula la supresión de movimientos no deseados y el equilibrio entre las vías directa e indirecta.","les":"Su disfunción altera el balance de las vías estriatales y contribuye a hipercinesias como la corea y el hemibalismo."},{"id":"globo-palido-interno","name":"Globo Pálido Interno","cat":"ganglios","region3d":"ganglios","def":"Segmento medial del globo pálido, principal núcleo de salida de los ganglios basales hacia el tálamo.","fun":"Inhibe de forma tónica al tálamo motor (vía GABAérgica); su modulación permite liberar o frenar los programas motores seleccionados en la corteza.","les":"Su hiperactividad genera la lentitud parkinsoniana; es diana de la palidotomía y de la estimulación cerebral profunda en Parkinson y distonía."},{"id":"nucleo-estriado","name":"Nucleo estriado","cat":"ganglios","region3d":"ganglios","def":"Estructura de entrada de los ganglios basales formada por el núcleo caudado y el putamen (cuerpo estriado).","fun":"Recibe aferencias glutamatérgicas de toda la corteza y dopaminérgicas de la sustancia negra; integra información motora, cognitiva y límbica para seleccionar acciones, hábitos y conductas motivadas.","les":"Su degeneración causa la enfermedad de Huntington y su disfunción dopaminérgica subyace a síntomas motores parkinsonianos y a trastornos del control de impulsos."},{"id":"nucleo-accumbens","name":"Núcleo Accumbens","cat":"ganglios","region3d":"ganglios","def":"Núcleo del estriado ventral situado donde confluyen la cabeza del caudado y el putamen, en la base del cerebro anterior.","fun":"Centro clave del circuito de recompensa; recibe dopamina del área tegmental ventral y media la motivación, el placer, el refuerzo y el aprendizaje apetitivo.","les":"Su desregulación es central en las adicciones y el craving, y su hipofunción se relaciona con la anhedonia de la depresión."},{"id":"nucleo-subtalamico","name":"Núcleo Subtalámico","cat":"ganglios","region3d":"ganglios","def":"Pequeño núcleo situado bajo el tálamo, único componente excitador (glutamatérgico) de los ganglios basales.","fun":"Nodo de la vía indirecta e hiperdirecta que excita al globo pálido interno para frenar movimientos; interviene en el control del impulso y la inhibición de respuestas.","les":"Su lesión unilateral causa hemibalismo (movimientos violentos de lanzamiento); es la principal diana de la estimulación cerebral profunda en la enfermedad de Parkinson."},{"id":"sustancia-negra","name":"Sustancia Negra","cat":"tronco","region3d":"tronco","def":"Núcleo pigmentado del mesencéfalo, parte funcional de los ganglios basales por sus conexiones estriatales.","fun":"Sus neuronas dopaminérgicas de la pars compacta (vía nigroestriada) modulan el inicio y control del movimiento y el circuito de recompensa; la pars reticulata es salida inhibidora.","les":"Su degeneración causa la enfermedad de Parkinson: temblor de reposo, rigidez, bradicinesia e inestabilidad postural."},{"id":"locus-coeruleus","name":"Locus Coeruleus","cat":"tronco","region3d":"tronco","def":"Núcleo pigmentado azulado del puente (protuberancia) dorsal, principal fuente de noradrenalina del encéfalo.","fun":"Su proyección noradrenérgica difusa regula la alerta, la vigilia, la atención, la respuesta al estrés y la consolidación de la memoria emocional.","les":"Su hiperactividad se asocia a la ansiedad, el pánico y la hipervigilancia del estrés postraumático, y su degeneración se relaciona con Parkinson y Alzheimer."},{"id":"nucleos-del-rafe","name":"Núcleos del Rafe","cat":"tronco","region3d":"tronco","def":"Columna de núcleos situados en la línea media del tronco encefálico, principal fuente de serotonina del sistema nervioso central.","fun":"Su proyección serotoninérgica difusa modula el estado de ánimo, el sueño, el apetito, el dolor y la regulación emocional.","les":"Su disfunción se vincula a la depresión y la ansiedad; es la diana de los antidepresivos inhibidores de la recaptación de serotonina (ISRS)."},{"id":"oliva-inferior","name":"Oliva Inferior","cat":"tronco","region3d":"tronco","def":"Núcleo con forma de saco arrugado situado en la cara anterolateral del bulbo raquídeo (médula oblongada).","fun":"Envía fibras trepadoras al cerebelo contralateral y es esencial para el aprendizaje motor, la sincronización temporal de los movimientos y la corrección de errores.","les":"Su lesión o desconexión produce temblor palatino y mioclonías; su disfunción altera la coordinación y el aprendizaje motor."},{"id":"nucleo-del-tracto-solitario","name":"Núcleo del Tracto Solitario","cat":"tronco","region3d":"tronco","def":"Núcleo sensitivo visceral del bulbo raquídeo que recibe aferencias de los nervios facial, glosofaríngeo y vago.","fun":"Estación principal del gusto y de la información visceral (presión arterial, respiración, distensión gástrica); coordina reflejos autónomos y la homeostasis cardiovascular y digestiva.","les":"Su lesión altera el gusto, el control autónomo y reflejos vitales como el barorreflejo, con inestabilidad de la presión arterial y de la deglución."},{"id":"coliculo-superior","name":"Colículo Superior","cat":"tronco","region3d":"tronco","def":"Par de eminencias del techo (tectum) del mesencéfalo que integran información visual, auditiva y somatosensorial.","fun":"Controla los movimientos oculares sacádicos y la orientación de la cabeza y los ojos hacia estímulos relevantes; base de la atención visuoespacial refleja.","les":"Su lesión produce déficits en la generación de sacadas y en la orientación automática de la mirada hacia estímulos nuevos."},{"id":"coliculo-inferior","name":"Colículo Inferior","cat":"tronco","region3d":"tronco","def":"Par de eminencias inferiores del techo del mesencéfalo, principal centro de relevo de la vía auditiva.","fun":"Integra y procesa la información auditiva ascendente, interviene en la localización del sonido y en reflejos de sobresalto y orientación acústica.","les":"Su lesión altera la localización espacial del sonido y el procesamiento auditivo, con dificultad para orientarse hacia estímulos sonoros."},{"id":"sistema-reticular-activadora-ascendente","name":"Sistema Reticular Activadora Ascendente","cat":"tronco","region3d":"tronco","def":"Red neuronal difusa de la formación reticular del tronco encefálico que proyecta al tálamo y la corteza.","fun":"Regula el nivel de conciencia, el ciclo sueño-vigilia, la alerta y el arousal cortical necesario para la atención y el procesamiento de la información.","les":"Su lesión provoca alteraciones de la conciencia que van de la somnolencia y el estupor hasta el coma."},{"id":"talamo","name":"Tálamo","cat":"talamo","region3d":"talamo","def":"Gran masa de sustancia gris pareada del diencéfalo situada a ambos lados del tercer ventrículo, por encima del hipotálamo.","fun":"Principal estación de relevo sensitivo y motor: filtra e integra casi toda la información (excepto el olfato) antes de proyectarla a la corteza cerebral, participando también en la regulación de la conciencia y la atención.","les":"Su lesión produce el síndrome talámico de Déjerine-Roussy con hemianestesia, dolor central contralateral y alteraciones de la conciencia."},{"id":"nucleo-dorsomedial-del-talamo","name":"Núcleo Dorsomedial del Tálamo","cat":"talamo","region3d":"talamo","def":"Núcleo talámico medial conectado recíprocamente con la corteza prefrontal y el sistema límbico.","fun":"Integra información emocional y límbica con la corteza prefrontal, contribuyendo a la memoria, la cognición y la regulación afectiva.","les":"Su lesión (p. ej. en el síndrome de Korsakoff) provoca amnesia anterógrada, confabulación y apatía emocional."},{"id":"nucleo-geniculado-lateral","name":"Núcleo Geniculado Lateral","cat":"talamo","region3d":"talamo","def":"Núcleo del tálamo posterior que recibe las fibras de la retina a través del tracto óptico.","fun":"Estación de relevo de la vía visual: procesa y envía la información visual a la corteza occipital (V1).","les":"Déficits del campo visual contralateral (cuadrantanopsias/hemianopsias) por interrupción de la vía visual."},{"id":"nucleo-geniculado-medial","name":"Núcleo Geniculado Medial","cat":"talamo","region3d":"talamo","def":"Núcleo del tálamo posterior situado bajo el pulvinar que recibe las fibras del lemnisco lateral de la vía auditiva.","fun":"Estación de relevo de la vía auditiva: envía la información auditiva a la corteza auditiva primaria del lóbulo temporal.","les":"Su lesión produce déficits en la localización e integración del sonido, con hipoacusia central parcial y bilateral atenuada."},{"id":"nucleo-pulvinar","name":"Núcleo Pulvinar","cat":"talamo","region3d":"talamo","def":"Núcleo más voluminoso del tálamo, situado en su porción posterior por encima de los cuerpos geniculados.","fun":"Núcleo de asociación que integra información visual y sensorial con las cortezas parietal, temporal y occipital, participando en la atención visual y la orientación.","les":"Su lesión altera la atención visuoespacial y puede contribuir a la negligencia (heminegligencia) contralateral."},{"id":"nucleo-ventral-anterior-del-talamo","name":"Núcleo Ventral anterior del Tálamo","cat":"talamo","region3d":"talamo","def":"Núcleo talámico ventral anterior que recibe aferencias de los ganglios basales (globo pálido y sustancia negra).","fun":"Forma parte de los circuitos motores: regula la iniciación y planificación del movimiento proyectando a las áreas motoras y premotoras.","les":"Su disfunción contribuye a trastornos del movimiento con bradicinesia y alteraciones en el inicio motor."},{"id":"nucleo-ventral-lateral-del-talamo","name":"Núcleo Ventral lateral del Tálamo","cat":"talamo","region3d":"talamo","def":"Núcleo talámico ventral lateral que recibe aferencias del cerebelo y de los ganglios basales.","fun":"Estación de relevo motora que coordina y ajusta el movimiento proyectando a la corteza motora primaria.","les":"Su lesión produce temblor, ataxia y alteraciones de la coordinación motora contralateral."},{"id":"hipotalamo-lateral","name":"Hipotálamo lateral","cat":"talamo","region3d":"hipotalamo","def":"Región lateral del hipotálamo que integra señales sobre el estado energético del organismo.","fun":"Constituye el centro del hambre: su activación estimula la ingesta de alimentos y la conducta de búsqueda de comida.","les":"Su lesión provoca afagia, adipsia y pérdida de peso por ausencia del impulso de comer."},{"id":"hipotalamo-ventral","name":"Hipotálamo ventral","cat":"talamo","region3d":"hipotalamo","def":"Región ventromedial del hipotálamo relacionada con la regulación de la conducta alimentaria.","fun":"Actúa como centro de la saciedad: su activación inhibe la ingesta y señala el cese de la conducta de comer.","les":"Su lesión produce hiperfagia, obesidad y agresividad (síndrome de obesidad hipotalámica)."},{"id":"cuerpos-mamilares","name":"Cuerpos Mamilares","cat":"limbico","region3d":"hipotalamo","def":"Par de pequeñas protuberancias esféricas situadas en la cara inferior del hipotálamo posterior, componente del sistema límbico.","fun":"Forman parte del circuito de Papez: reciben el fórnix desde el hipocampo y proyectan al tálamo anterior, participando en la memoria episódica.","les":"Su lesión (típica del síndrome de Korsakoff por déficit de tiamina) causa amnesia anterógrada grave y confabulación."},{"id":"hemisferios-cerebelosos","name":"Hemisferios Cerebelosos","cat":"cerebelo","region3d":"cerebelo","def":"Las dos grandes masas laterales del cerebelo situadas a ambos lados del vermis, en la fosa craneal posterior.","fun":"Coordinan la planificación y ejecución fina de los movimientos voluntarios de las extremidades ipsilaterales, ajustando su precisión y sincronización.","les":"Su lesión produce ataxia, dismetría, temblor de intención y descoordinación de los miembros del mismo lado."},{"id":"vermis","name":"Vermis","cat":"cerebelo","region3d":"cerebelo","def":"Porción medial y estrecha del cerebelo que une ambos hemisferios cerebelosos en la línea media.","fun":"Regula la postura, el equilibrio, el tono muscular y la marcha, controlando la musculatura axial y del tronco.","les":"Su lesión provoca ataxia de la marcha y del tronco, con inestabilidad postural y marcha de base amplia (síndrome del vermis)."},{"id":"nucleo-dentado-del-cerebelo","name":"Núcleo Dentado del Cerebelo","cat":"cerebelo","region3d":"cerebelo","def":"El mayor de los núcleos profundos del cerebelo, situado en la sustancia blanca de cada hemisferio cerebeloso.","fun":"Principal vía de salida del cerebelo hacia el tálamo y la corteza motora, coordina la planificación y el inicio de los movimientos voluntarios finos.","les":"Su lesión produce dismetría, temblor de intención y disartria por alteración del control motor fino."},{"id":"amigdala","name":"Amigdala","cat":"limbico","region3d":"limbico","def":"Núcleo con forma de almendra situado en la profundidad del lóbulo temporal, por delante del hipocampo, en el sistema límbico.","fun":"Centro de procesamiento emocional que asigna valor afectivo a los estímulos; es esencial para el aprendizaje y la memoria del miedo y el condicionamiento emocional.","les":"Su lesión bilateral produce el síndrome de Klüver-Bucy (docilidad, hiperoralidad, hipersexualidad) y ceguera afectiva con incapacidad para reconocer el miedo en rostros."},{"id":"hipocampo","name":"Hipocampo","cat":"limbico","region3d":"limbico","def":"Estructura curva con forma de caballito de mar situada en la cara medial del lóbulo temporal, componente central de la formación hipocampal.","fun":"Clave para la consolidación de la memoria declarativa (episódica y espacial), transformando la memoria a corto plazo en memoria a largo plazo.","les":"Su lesión bilateral causa amnesia anterógrada grave, como en el célebre caso del paciente H.M., que no podía formar nuevos recuerdos explícitos."},{"id":"fornix","name":"Fórnix","cat":"blanca","region3d":"blanca","def":"Haz de fibras blancas en forma de arco que sale del hipocampo hacia los cuerpos mamilares.","fun":"Principal vía de salida del hipocampo; conecta la formación hipocampal con el hipotálamo dentro del circuito de Papez de la memoria.","les":"Su sección produce amnesia anterógrada por desconexión del hipocampo."},{"id":"giro-dentado","name":"Giro Dentado","cat":"limbico","region3d":"limbico","def":"Lámina de sustancia gris dentada que forma parte de la formación hipocampal, situada en la cara medial del lóbulo temporal.","fun":"Recibe la aferencia principal desde la corteza entorrinal y es una de las pocas regiones con neurogénesis adulta, contribuyendo a la separación de patrones en la memoria.","les":"Su alteración deteriora la formación de nuevos recuerdos y la discriminación de contextos similares; es vulnerable a la isquemia y al estrés crónico."},{"id":"subiculo","name":"Subículo","cat":"limbico","region3d":"limbico","def":"Región de transición de la formación hipocampal situada entre el hipocampo propiamente dicho y la corteza entorrinal.","fun":"Constituye la principal vía de salida de la formación hipocampal, proyectando información procesada hacia el fórnix, la corteza entorrinal y estructuras subcorticales relacionadas con la memoria espacial.","les":"Su disfunción contribuye a déficits de memoria y de navegación espacial y participa en la fisiopatología de la epilepsia del lóbulo temporal."},{"id":"corteza-entorrinal","name":"Corteza Entorrinal","cat":"limbico","region3d":"limbico","def":"Corteza situada en la parte anterior del giro parahipocampal, en el lóbulo temporal medial, que actúa como interfaz entre el neocórtex y el hipocampo.","fun":"Es la principal puerta de entrada y salida de información del hipocampo; contiene células de rejilla esenciales para la memoria espacial y la navegación.","les":"Es una de las primeras regiones afectadas en la enfermedad de Alzheimer, lo que explica la pérdida temprana de memoria y desorientación espacial."},{"id":"corteza-parahipocampal","name":"Corteza Parahipocampal","cat":"limbico","region3d":"limbico","def":"Corteza del giro parahipocampal que rodea al hipocampo en la cara medial e inferior del lóbulo temporal.","fun":"Interviene en la memoria de reconocimiento y en el procesamiento del contexto espacial y de las escenas del entorno.","les":"Su lesión provoca dificultades para reconocer lugares y escenas y contribuye a déficits de memoria contextual."},{"id":"corteza-perirrinal","name":"Corteza Perirrinal","cat":"limbico","region3d":"limbico","def":"Corteza situada alrededor del surco rinal, en el lóbulo temporal medial, adyacente a la corteza entorrinal.","fun":"Fundamental para la memoria de reconocimiento de objetos y la sensación de familiaridad de los estímulos.","les":"Su lesión deteriora selectivamente el reconocimiento de objetos y la discriminación entre estímulos familiares y novedosos."},{"id":"septum-pellucidum","name":"Septum Pellucidum","cat":"limbico","region3d":"limbico","def":"Fina membrana doble situada en la línea media que separa los cuernos anteriores de los ventrículos laterales, por debajo del cuerpo calloso.","fun":"Se asocia a los núcleos septales del sistema límbico, implicados en la regulación emocional, la recompensa y la modulación de la memoria hipocampal.","les":"Su ausencia o malformación se relaciona con alteraciones del desarrollo cerebral, y las lesiones septales pueden producir rabia e irritabilidad."},{"id":"comisura-anterior","name":"Comisura Anterior","cat":"blanca","region3d":"blanca","def":"Pequeño haz compacto de fibras blancas que cruza la línea media por delante de las columnas del fórnix, conectando ambos hemisferios.","fun":"Interconecta los lóbulos temporales y regiones olfativas de ambos hemisferios, complementando al cuerpo calloso en la transferencia interhemisférica.","les":"Su sección contribuye, junto con la del cuerpo calloso, a los signos de desconexión interhemisférica del cerebro dividido."},{"id":"capsula-interna","name":"Cápsula Interna","cat":"blanca","region3d":"blanca","def":"Banda gruesa de sustancia blanca situada entre el tálamo, el núcleo caudado y el núcleo lenticular, con brazo anterior, rodilla y brazo posterior.","fun":"Vía de paso de los principales tractos ascendentes y descendentes, incluida la vía corticoespinal, entre la corteza y el tronco encefálico y la médula.","les":"Un infarto en ella produce hemiplejía contralateral densa por interrupción de las fibras motoras (síndrome de ictus lacunar)."},{"id":"fasciculo-arqueado","name":"Fascículo Arqueado","cat":"blanca","region3d":"blanca","def":"Haz de sustancia blanca en forma de arco que conecta el área de Broca (frontal) con el área de Wernicke (temporal) en el hemisferio dominante.","fun":"Vía asociativa clave del lenguaje que permite la repetición y la integración entre la comprensión y la producción del habla.","les":"Su lesión causa afasia de conducción, caracterizada por una repetición muy alterada con comprensión y fluidez relativamente conservadas."},{"id":"glandula-pineal","name":"Glándula pineal","cat":"endocrino","region3d":"pineal","def":"Pequeña glándula endocrina situada en la línea media, en el techo del diencéfalo, por detrás del tercer ventrículo.","fun":"Secreta melatonina en respuesta a la oscuridad, regulando los ritmos circadianos y el ciclo sueño-vigilia.","les":"Sus tumores (pinealomas) pueden comprimir el techo del mesencéfalo y causar el síndrome de Parinaud, con parálisis de la mirada vertical hacia arriba."},{"id":"par-craneal-1","name":"Par craneal 1","cat":"pares","region3d":"pares","def":"Nervio olfatorio (I): par craneal sensitivo puro que transmite el sentido del olfato.","fun":"Lleva la información de los olores desde la mucosa nasal hasta el bulbo olfatorio y las áreas olfativas del cerebro, muy vinculadas a la memoria y la emoción.","les":"Su lesión provoca pérdida total (anosmia) o alteración del olfato, con frecuente disminución del sabor de los alimentos."},{"id":"par-craneal-2","name":"Par craneal 2","cat":"pares","region3d":"pares","def":"Nervio óptico (II): par craneal sensitivo puro que transmite la visión.","fun":"Lleva la información visual desde la retina hasta el quiasma y las vías ópticas del cerebro.","les":"Su lesión provoca pérdida de visión (amaurosis) del ojo afectado o defectos del campo visual."},{"id":"par-craneal-3-oculomotor","name":"Par craneal 3 (oculomotor)","cat":"pares","region3d":"pares","def":"Nervio oculomotor (III): par craneal motor que inerva la mayoría de los músculos del ojo.","fun":"Mueve el globo ocular, eleva el párpado superior y controla la constricción pupilar y la acomodación del cristalino.","les":"Su lesión produce caída del párpado (ptosis), desviación del ojo hacia afuera, visión doble y pupila dilatada que no reacciona a la luz."},{"id":"par-craneal-4","name":"Par craneal 4","cat":"pares","region3d":"pares","def":"Nervio troclear o patético (IV): par craneal motor que inerva el músculo oblicuo superior del ojo.","fun":"Dirige el ojo hacia abajo y hacia adentro, permitiendo mirar la punta de la nariz o bajar escaleras.","les":"Su lesión causa visión doble vertical y dificultad para mirar hacia abajo, con inclinación compensatoria de la cabeza."},{"id":"par-craneal-5","name":"Par craneal 5","cat":"pares","region3d":"pares","def":"Nervio trigémino (V): par craneal mixto, principal nervio sensitivo de la cara y motor de la masticación.","fun":"Recoge la sensibilidad de cara, córnea y mucosas, e inerva los músculos que mueven la mandíbula al masticar.","les":"Su lesión provoca pérdida de sensibilidad facial, debilidad masticatoria y, si se irrita, dolor intenso (neuralgia del trigémino)."},{"id":"par-craneal-6","name":"Par craneal 6","cat":"pares","region3d":"pares","def":"Nervio abducens o motor ocular externo (VI): par craneal motor que inerva el músculo recto lateral del ojo.","fun":"Mueve el globo ocular hacia afuera (abducción), separándolo de la línea media.","les":"Su lesión impide llevar el ojo hacia afuera, provocando estrabismo convergente y visión doble horizontal."},{"id":"par-craneal-7","name":"Par craneal 7","cat":"pares","region3d":"pares","def":"Nervio facial (VII): par craneal mixto que controla la mímica facial y parte del gusto.","fun":"Inerva los músculos de la expresión facial, las glándulas lagrimales y salivales, y recoge el gusto de los dos tercios anteriores de la lengua.","les":"Su lesión causa parálisis facial (parálisis de Bell), con caída de un lado de la cara, imposibilidad de cerrar el ojo y pérdida del gusto."},{"id":"par-craneal-8","name":"Par craneal 8","cat":"pares","region3d":"pares","def":"Nervio vestibulococlear o auditivo (VIII): par craneal sensitivo puro de la audición y el equilibrio.","fun":"Transmite la información auditiva de la cóclea y la del equilibrio y posición de la cabeza desde el aparato vestibular.","les":"Su lesión provoca sordera, zumbidos (acúfenos), vértigo y pérdida del equilibrio."},{"id":"par-craneal-9","name":"Par craneal 9","cat":"pares","region3d":"pares","def":"Nervio glosofaríngeo (IX): par craneal mixto relacionado con la faringe, la deglución y el gusto posterior.","fun":"Recoge la sensibilidad y el gusto del tercio posterior de la lengua, participa en la deglución y regula la salivación y el reflejo faríngeo.","les":"Su lesión altera el gusto posterior, dificulta la deglución, abole el reflejo nauseoso y puede producir neuralgia glosofaríngea."},{"id":"par-craneal-10","name":"Par craneal 10","cat":"pares","region3d":"pares","def":"Nervio vago (X): par craneal mixto y principal nervio parasimpático del cuerpo.","fun":"Regula la voz y la deglución e inerva el corazón, los pulmones y el aparato digestivo, siendo clave en la respuesta de calma y relajación.","les":"Su lesión produce ronquera, dificultad para tragar, alteraciones del ritmo cardíaco y de la función digestiva."},{"id":"par-craneal-11","name":"Par craneal 11","cat":"pares","region3d":"pares","def":"Nervio accesorio o espinal (XI): par craneal motor que inerva músculos del cuello y el hombro.","fun":"Controla los músculos esternocleidomastoideo y trapecio, permitiendo girar la cabeza y encoger los hombros.","les":"Su lesión debilita el giro de la cabeza y la elevación del hombro, con caída del hombro del lado afectado."},{"id":"par-craneal-12","name":"Par craneal 12","cat":"pares","region3d":"pares","def":"Nervio hipogloso (XII): par craneal motor que inerva los músculos de la lengua.","fun":"Controla los movimientos de la lengua necesarios para hablar, masticar y tragar.","les":"Su lesión produce debilidad y atrofia de la lengua, que se desvía hacia el lado lesionado, con dificultad para hablar y tragar."},{"id":"glandula-pituitaria-hipofisis","name":"Glandula pituitaria (hipófisis)","cat":"endocrino","region3d":"hipofisis","def":"Glándula endocrina situada en la base del cerebro, bajo el hipotálamo, considerada la glándula maestra del organismo.","fun":"Controlada por el hipotálamo, secreta hormonas que regulan a las demás glándulas (tiroides, suprarrenales, gónadas) y procesos como el crecimiento, el estrés y el vínculo social mediante oxitocina.","les":"Su lesión o disfunción altera múltiples ejes hormonales, causando trastornos del crecimiento, del metabolismo, de la reproducción y de la respuesta al estrés."},{"id":"glandula-tiroides","name":"Glandula Tiroides","cat":"endocrino","region3d":"periferico","def":"Glándula endocrina en forma de mariposa situada en la parte anterior del cuello.","fun":"Produce hormonas tiroideas que regulan el metabolismo, el nivel de energía y el desarrollo cerebral; sus alteraciones influyen mucho en el estado de ánimo, con apatía en el hipotiroidismo y ansiedad en el hipertiroidismo.","les":"Su alteración causa hipotiroidismo (fatiga, lentitud, depresión) o hipertiroidismo (nerviosismo, insomnio, ansiedad), afectando la conducta y la cognición."},{"id":"glandula-supra-renal","name":"glándula supra renal","cat":"endocrino","region3d":"periferico","def":"Glándula suprarrenal (adrenal): glándula endocrina situada sobre cada riñón, con corteza y médula.","fun":"Es central en la respuesta al estrés: libera cortisol (eje hipotálamo-hipófisis-suprarrenal) y adrenalina, preparando al cuerpo para la reacción de lucha o huida y modulando emoción, alerta y memoria.","les":"Su disfunción altera la respuesta al estrés: el exceso de cortisol produce ansiedad e insomnio y su déficit provoca fatiga y baja tolerancia al estrés."},{"id":"pancreas","name":"Pancreas","cat":"endocrino","region3d":"periferico","def":"Glándula mixta abdominal con función digestiva (exocrina) y hormonal (endocrina).","fun":"Sus islotes de Langerhans secretan insulina y glucagón para regular la glucosa en sangre, cuyo equilibrio afecta la energía, la concentración y el estado de ánimo relevantes para la conducta.","les":"Su alteración causa diabetes por déficit de insulina, con hiperglucemia que puede producir fatiga, irritabilidad y dificultades de concentración."},{"id":"ovarios","name":"Ovarios","cat":"endocrino","region3d":"periferico","def":"Glándulas sexuales (gónadas) femeninas situadas en la pelvis.","fun":"Producen óvulos y las hormonas estrógenos y progesterona, que regulan el ciclo menstrual, el desarrollo sexual y también influyen en el estado de ánimo, la emoción y la conducta (p. ej. síndrome premenstrual).","les":"Su disfunción altera el ciclo y la fertilidad y provoca cambios hormonales asociados a irritabilidad, ansiedad o síntomas depresivos."},{"id":"testiculos","name":"Testiculos","cat":"endocrino","region3d":"periferico","def":"Glándulas sexuales (gónadas) masculinas situadas en el escroto.","fun":"Producen espermatozoides y testosterona, hormona que impulsa el desarrollo sexual masculino y se relaciona con la energía, la libido y conductas de dominancia y agresividad.","les":"Su disfunción reduce la testosterona, causando bajo deseo sexual, fatiga, y a veces alteraciones del ánimo y de la motivación."},{"id":"timo","name":"Timo","cat":"endocrino","region3d":"periferico","def":"Glándula linfoide y endocrina situada detrás del esternón, muy activa en la infancia.","fun":"Madura los linfocitos T del sistema inmunitario y secreta hormonas (timosinas); su actividad decae con la edad y conecta el desarrollo con la respuesta inmune, un eje de interés en psiconeuroinmunología (estrés e inmunidad).","les":"Su alteración debilita la inmunidad celular y se asocia a enfermedades autoinmunes como la miastenia gravis."}];
+
+const CATS = {
+  corteza:{label:'Corteza y áreas de Brodmann', color:'#ff6b6b'},
+  giros:{label:'Giros y surcos', color:'#ff9f43'},
+  ganglios:{label:'Ganglios basales', color:'#feca57'},
+  talamo:{label:'Tálamo y diencéfalo', color:'#48dbfb'},
+  limbico:{label:'Sistema límbico', color:'#ff7fbf'},
+  tronco:{label:'Tronco encefálico', color:'#a29bfe'},
+  cerebelo:{label:'Cerebelo', color:'#1dd1a1'},
+  blanca:{label:'Sustancia blanca', color:'#b8e994'},
+  pares:{label:'Pares craneales', color:'#54a0ff'},
+  endocrino:{label:'Sistema endocrino', color:'#ee5253'}
+};
+
+/* Regiones físicas del modelo 3D (varias estructuras comparten región) */
+const REGIONS = {
+  frontal:{label:'Lóbulo frontal', color:'#ff6b6b', home:[0,0.55,1.25], dir:[0,0.5,2.5], build:'lobe', dims:[1.5,1.15,1.35]},
+  parietal:{label:'Lóbulo parietal', color:'#ffd93d', home:[0,1.08,-0.28], dir:[0,2.6,-0.4], build:'lobe', dims:[1.55,1.1,1.15]},
+  temporal:{label:'Lóbulo temporal', color:'#4ecdc4', home:[0,-0.45,0.35], dir:[0,-2.6,0.7], build:'temporal'},
+  occipital:{label:'Lóbulo occipital', color:'#a66bff', home:[0,0.45,-1.65], dir:[0,0.5,-2.9], build:'lobe', dims:[1.3,1.0,0.95]},
+  cingulado:{label:'Corteza cingulada', color:'#f78fb3', home:[0,0.62,-0.1], dir:[0,2.9,0.3], build:'cingulate'},
+  insula:{label:'Ínsula', color:'#ff9f43', home:[0,-0.1,0.5], dir:[0,-1.7,2.3], build:'insula'},
+  cerebelo:{label:'Cerebelo', color:'#1dd1a1', home:[0,-1.02,-1.5], dir:[0,-1.7,-2.7], build:'folds', dims:[1.25,0.8,0.92]},
+  tronco:{label:'Tronco encefálico', color:'#a29bfe', home:[0,-1.35,-0.65], dir:[0,-3.2,-0.3], build:'stem'},
+  talamo:{label:'Tálamo', color:'#ff7fbf', home:[0,0.05,-0.1], dir:[2.9,0.5,0], build:'thal'},
+  hipotalamo:{label:'Hipotálamo', color:'#f368e0', home:[0,-0.5,0.2], dir:[2.7,-1.8,0.5], build:'small'},
+  ganglios:{label:'Ganglios basales', color:'#feca57', home:[0,0.05,0.1], dir:[-2.7,1.5,0.4], build:'ganglia'},
+  limbico:{label:'Sistema límbico', color:'#48dbfb', home:[0,-0.3,0.15], dir:[-2.7,-1.4,0.5], build:'limbic'},
+  blanca:{label:'Sustancia blanca', color:'#b8e994', home:[0,0.2,-0.05], dir:[0,1.9,2.7], build:'white'},
+  pineal:{label:'Glándula pineal', color:'#e77f67', home:[0,0.28,-0.85], dir:[0,1.5,-2.7], build:'tiny'},
+  hipofisis:{label:'Hipófisis', color:'#ffb8b8', home:[0,-1.0,0.35], dir:[0,-2.9,0.7], build:'pituitary'}
+};
+
+/* ============================================================
+   THREE.JS
+   ============================================================ */
+let renderer, scene, camera, raycaster, pointer;
+let meshList = [], booted=false;
+let selectedStruct=null, selectedRegion=null, hoverRegion=null, isolate=false;
+
+const canvasWrap=document.getElementById('canvasWrap');
+const tooltip=document.getElementById('tooltip');
+const labelsBox=document.getElementById('labels');
+const clipPlane = new THREE.Plane(new THREE.Vector3(-1,0,0), 3.0);
+
+function wrinkle(geo, amp, freq, seed, folds){
+  const pos=geo.attributes.position, t=new THREE.Vector3();
+  for(let i=0;i<pos.count;i++){
+    t.fromBufferAttribute(pos,i);
+    let d;
+    if(folds){ d=1+amp*(Math.sin(t.y*freq*3+seed)*0.6+Math.sin(t.x*freq*1.5)*0.15); }
+    else{
+      const n1=Math.sin(t.x*freq+seed)*Math.cos(t.y*freq*1.3+seed)*Math.sin(t.z*freq*0.8+seed);
+      const n2=Math.sin(t.x*freq*2.1+seed*2)*Math.sin(t.z*freq*1.7+seed);
+      d=1+amp*(n1*0.62+n2*0.38);
+    }
+    t.multiplyScalar(d); pos.setXYZ(i,t.x,t.y,t.z);
+  }
+  geo.computeVertexNormals();
+}
+function lobeGeo(rx,ry,rz,seed,folds){
+  const g=new THREE.SphereGeometry(1,46,34);
+  wrinkle(g, folds?0.12:0.14, folds?2.4:3.0, seed, folds);
+  g.scale(rx,ry,rz); return g;
+}
+function mat(color){
+  return new THREE.MeshStandardMaterial({
+    color:new THREE.Color(color), roughness:0.62, metalness:0.05,
+    emissive:new THREE.Color(color), emissiveIntensity:0,
+    transparent:true, opacity:1, side:THREE.DoubleSide,
+    clippingPlanes:[clipPlane], clipShadows:true
+  });
+}
+function reg(regKey, mesh){ mesh.userData.region=regKey; meshList.push(mesh); REGIONS[regKey]._meshes.push(mesh); }
+
+function buildRegion(key){
+  const R=REGIONS[key]; R._meshes=[];
+  const g=new THREE.Group(); g.position.set(R.home[0],R.home[1],R.home[2]); R._group=g;
+  const c=R.color, seed=key.length*1.7+0.6;
+
+  if(R.build==='lobe'){
+    const m=new THREE.Mesh(lobeGeo(R.dims[0],R.dims[1],R.dims[2],seed,0), mat(c)); g.add(m); reg(key,m);
+  } else if(R.build==='temporal'){
+    for(const sx of [1,-1]){
+      const m=new THREE.Mesh(lobeGeo(0.72,0.72,1.35,seed+sx,0), mat(c));
+      m.position.set(sx*1.25,0,0.1); g.add(m); reg(key,m);
+    }
+  } else if(R.build==='folds'){
+    const m=new THREE.Mesh(lobeGeo(R.dims[0],R.dims[1],R.dims[2],seed,1), mat(c)); g.add(m); reg(key,m);
+  } else if(R.build==='cingulate'){
+    const geo=new THREE.TorusGeometry(0.95,0.1,14,60,Math.PI*1.15);
+    const m=new THREE.Mesh(geo, mat(c)); m.rotation.y=Math.PI/2; m.rotation.z=-Math.PI*0.5;
+    m.scale.set(1,0.7,1.5); g.add(m); reg(key,m);
+  } else if(R.build==='insula'){
+    for(const sx of [1,-1]){
+      const geo=new THREE.SphereGeometry(1,26,20); geo.scale(0.34,0.5,0.6);
+      const m=new THREE.Mesh(geo, mat(c)); m.position.set(sx*0.78,-0.05,0); g.add(m); reg(key,m);
+    }
+  } else if(R.build==='stem'){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.2,1.5,22,5), mat(c)); m.rotation.x=-0.18; g.add(m); reg(key,m);
+    const pons=new THREE.Mesh(new THREE.SphereGeometry(0.4,22,16), mat(c)); pons.position.set(0,0.35,0.16); pons.scale.set(1,0.7,0.8); g.add(pons); reg(key,pons);
+    for(const sy of [0.62,0.44]) for(const sx of [1,-1]){ // colículos
+      const cc=new THREE.Mesh(new THREE.SphereGeometry(0.13,16,12), mat(c)); cc.position.set(sx*0.15,sy,-0.28); g.add(cc); reg(key,cc);
+    }
+  } else if(R.build==='thal'){
+    for(const sx of [1,-1]){
+      const geo=new THREE.SphereGeometry(1,28,22); geo.scale(0.42,0.5,0.62);
+      const m=new THREE.Mesh(geo, mat(c)); m.position.set(sx*0.36,0,0); g.add(m); reg(key,m);
+    }
+  } else if(R.build==='small'){
+    const geo=new THREE.SphereGeometry(0.34,24,18);
+    const m=new THREE.Mesh(geo, mat(c)); g.add(m); reg(key,m);
+  } else if(R.build==='ganglia'){
+    for(const sx of [1,-1]){
+      const put=new THREE.Mesh((()=>{const gg=new THREE.SphereGeometry(1,24,18);gg.scale(0.24,0.42,0.5);return gg;})(), mat(c));
+      put.position.set(sx*0.66,0.02,0.1); g.add(put); reg(key,put);
+      const cau=new THREE.Mesh((()=>{const gg=new THREE.SphereGeometry(1,20,16);gg.scale(0.2,0.3,0.36);return gg;})(), mat(c));
+      cau.position.set(sx*0.42,0.28,0.45); g.add(cau); reg(key,cau);
+      const gp=new THREE.Mesh((()=>{const gg=new THREE.SphereGeometry(1,18,14);gg.scale(0.15,0.34,0.4);return gg;})(), mat('#f6b93b'));
+      gp.position.set(sx*0.5,0,0.08); g.add(gp); reg(key,gp);
+    }
+  } else if(R.build==='limbic'){
+    const curve=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0,0.3,0.45),new THREE.Vector3(0.14,0.28,0.05),
+      new THREE.Vector3(0.05,0.1,-0.35),new THREE.Vector3(-0.08,-0.14,-0.5),new THREE.Vector3(-0.02,-0.32,-0.2)]);
+    for(const sx of [1,-1]){
+      const hip=new THREE.Mesh(new THREE.TubeGeometry(curve,54,0.12,10,false), mat(c));
+      hip.position.set(sx*0.9,-0.02,0.05); hip.scale.x=sx; g.add(hip); reg(key,hip);
+      const amy=new THREE.Mesh((()=>{const gg=new THREE.SphereGeometry(0.22,20,16);gg.scale(1,0.85,1.2);return gg;})(), mat('#ff7f9c'));
+      amy.position.set(sx*0.95,0.02,0.72); g.add(amy); reg(key,amy);
+    }
+  } else if(R.build==='white'){
+    const cc=new THREE.Mesh(new THREE.TorusGeometry(0.92,0.11,14,54,Math.PI*1.1), mat(c));
+    cc.rotation.y=Math.PI/2; cc.rotation.z=-Math.PI*0.56; cc.scale.set(1,0.5,1.35); g.add(cc); reg(key,cc);
+    const fx=new THREE.Mesh(new THREE.TorusGeometry(0.55,0.05,10,40,Math.PI*0.9), mat('#a8e063'));
+    fx.rotation.y=Math.PI/2; fx.rotation.z=-Math.PI*0.35; fx.position.set(0,-0.2,-0.1); g.add(fx); reg(key,fx);
+  } else if(R.build==='tiny'){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(0.13,16,12), mat(c)); g.add(m); reg(key,m);
+  } else if(R.build==='pituitary'){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(0.16,18,14), mat(c)); g.add(m); reg(key,m);
+    const stalk=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.34,8), mat(c)); stalk.position.set(0,0.24,0); g.add(stalk); reg(key,stalk);
+  }
+  return g;
+}
+
+function initScene(){
+  renderer=new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(canvasWrap.clientWidth, canvasWrap.clientHeight);
+  renderer.localClippingEnabled=true;
+  canvasWrap.appendChild(renderer.domElement);
+
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(42, canvasWrap.clientWidth/canvasWrap.clientHeight, 0.1, 100);
+  scene.add(new THREE.AmbientLight(0xb9c6ff,0.6));
+  const k=new THREE.DirectionalLight(0xffffff,1.1); k.position.set(4,6,6); scene.add(k);
+  const f=new THREE.DirectionalLight(0x8fb0ff,0.55); f.position.set(-6,1,-4); scene.add(f);
+  const r=new THREE.DirectionalLight(0xff9edb,0.5); r.position.set(0,-5,-6); scene.add(r);
+
+  const brain=new THREE.Group();
+  Object.keys(REGIONS).forEach(k=> brain.add(buildRegion(k)));
+  scene.add(brain);
+
+  raycaster=new THREE.Raycaster(); pointer=new THREE.Vector2();
+  buildLabels();
+  updateCamera(); bindControls();
+  booted=true; document.getElementById('overlay').style.display='none';
+  animate();
+}
+
+/* ---- cámara órbita ---- */
+const target=new THREE.Vector3(0,-0.1,0);
+let radius=9.4, theta=0.62, phi=1.25, spin=false, dragging=false, downX=0,downY=0,moved=0;
+function updateCamera(){
+  const sp=Math.sin(phi);
+  camera.position.set(target.x+radius*sp*Math.sin(theta), target.y+radius*Math.cos(phi), target.z+radius*sp*Math.cos(theta));
+  camera.lookAt(target);
+}
+function bindControls(){
+  const el=renderer.domElement;
+  el.addEventListener('pointerdown',e=>{dragging=true;moved=0;downX=e.clientX;downY=e.clientY;el.setPointerCapture(e.pointerId);});
+  el.addEventListener('pointermove',e=>{
+    const r=el.getBoundingClientRect();
+    pointer.x=((e.clientX-r.left)/r.width)*2-1; pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+    if(dragging){const dx=e.clientX-downX,dy=e.clientY-downY;moved+=Math.abs(dx)+Math.abs(dy);
+      theta-=dx*0.006;phi-=dy*0.006;phi=Math.max(0.25,Math.min(Math.PI-0.25,phi));downX=e.clientX;downY=e.clientY;updateCamera();}
+    else hoverTest(e);
+  });
+  el.addEventListener('pointerup',()=>{dragging=false; if(moved<7) clickTest();});
+  el.addEventListener('pointerleave',()=>{setHover(null);tooltip.style.opacity=0;});
+  el.addEventListener('wheel',e=>{e.preventDefault();radius*=(1+e.deltaY*0.0011);radius=Math.max(4.5,Math.min(20,radius));updateCamera();},{passive:false});
+}
+function hoverTest(e){
+  raycaster.setFromCamera(pointer,camera);
+  const hit=raycaster.intersectObjects(meshList,false)[0];
+  if(hit){
+    const rk=hit.object.userData.region; setHover(rk);
+    const r=renderer.domElement.getBoundingClientRect();
+    tooltip.textContent=REGIONS[rk].label;
+    tooltip.style.left=(e.clientX-r.left)+'px'; tooltip.style.top=(e.clientY-r.top)+'px'; tooltip.style.opacity=1;
+    renderer.domElement.style.cursor='pointer';
+  }else{ setHover(null); tooltip.style.opacity=0; renderer.domElement.style.cursor=dragging?'grabbing':'grab'; }
+}
+function clickTest(){
+  raycaster.setFromCamera(pointer,camera);
+  const hit=raycaster.intersectObjects(meshList,false)[0];
+  if(hit) selectRegion(hit.object.userData.region);
+}
+function setHover(rk){ if(hoverRegion===rk)return; hoverRegion=rk; refreshEmissive(); }
+function refreshEmissive(){
+  for(const k in REGIONS){
+    const R=REGIONS[k]; if(!R._meshes)continue;
+    const on=(k===selectedRegion)?0.55:(k===hoverRegion?0.28:0.0);
+    const op=(isolate && selectedRegion && k!==selectedRegion)?0.12:1.0;
+    R._meshes.forEach(m=>{m.material.emissiveIntensity=on;m.material.opacity=op;});
+  }
+}
+
+/* ---- etiquetas ---- */
+let labelsOn=false; const labelEls={};
+function buildLabels(){
+  for(const k in REGIONS){
+    const d=document.createElement('div'); d.className='lbl3d'; d.textContent=REGIONS[k].label;
+    d.style.display='none'; labelsBox.appendChild(d); labelEls[k]=d;
+  }
+}
+function updateLabels(){
+  if(!labelsOn)return;
+  const w=canvasWrap.clientWidth,h=canvasWrap.clientHeight, v=new THREE.Vector3();
+  for(const k in REGIONS){
+    const R=REGIONS[k]; v.copy(R._group.position); v.project(camera);
+    const el=labelEls[k];
+    if(v.z<1){ el.style.display='block'; el.style.left=((v.x*0.5+0.5)*w)+'px'; el.style.top=((-v.y*0.5+0.5)*h)+'px'; }
+    else el.style.display='none';
+  }
+}
+
+/* ---- desarme + corte ---- */
+let explodeTarget=0, explode=0;
+const slider=document.getElementById('explode');
+function animate(){
+  requestAnimationFrame(animate);
+  if(spin&&!dragging){theta+=0.0028;updateCamera();}
+  explode+=(explodeTarget-explode)*0.09;
+  for(const k in REGIONS){const R=REGIONS[k];
+    R._group.position.set(R.home[0]+R.dir[0]*explode, R.home[1]+R.dir[1]*explode, R.home[2]+R.dir[2]*explode);}
+  updateLabels();
+  renderer.render(scene,camera);
+}
+slider.addEventListener('input',()=>explodeTarget=slider.value/100);
+document.getElementById('btnArmar').onclick=()=>{explodeTarget=0;slider.value=0;};
+document.getElementById('btnDesarmar').onclick=()=>{explodeTarget=1;slider.value=100;};
+document.getElementById('btnSpin').onclick=e=>{spin=!spin;e.target.classList.toggle('active',spin);};
+document.getElementById('btnReset').onclick=()=>{radius=9.4;theta=0.62;phi=1.25;updateCamera();};
+document.getElementById('btnLabels').onclick=e=>{labelsOn=!labelsOn;e.target.classList.toggle('active',labelsOn);
+  if(!labelsOn)for(const k in labelEls)labelEls[k].style.display='none';};
+
+const clip=document.getElementById('clip'), clipAxis=document.getElementById('clipAxis');
+function applyClip(){
+  const ax=clipAxis.value, t=clip.value/100; // 1 = sin corte
+  const n={x:new THREE.Vector3(-1,0,0),y:new THREE.Vector3(0,-1,0),z:new THREE.Vector3(0,0,-1)}[ax];
+  clipPlane.normal.copy(n);
+  clipPlane.constant = -2.4 + t*4.8; // de -2.4 (todo cortado) a 2.4 (nada)
+}
+clip.addEventListener('input',applyClip); clipAxis.addEventListener('change',applyClip); applyClip();
+
+/* ============================================================
+   ATLAS (sidebar)
+   ============================================================ */
+const listEl=document.getElementById('list'), searchEl=document.getElementById('search');
+const filtersEl=document.getElementById('filters'), listCount=document.getElementById('listCount');
+let activeCat=null, query='';
+
+document.getElementById('cnt').textContent=STRUCTURES.length;
+
+// filtros por categoría
+Object.keys(CATS).forEach(k=>{
+  const c=CATS[k], b=document.createElement('button'); b.className='fchip'; b.dataset.cat=k;
+  b.innerHTML=`<span class="d" style="background:${c.color}"></span>${c.label.split(' y ')[0]}`;
+  b.onclick=()=>{activeCat=(activeCat===k)?null:k; syncFilters(); renderList();};
+  filtersEl.appendChild(b);
+});
+function syncFilters(){ filtersEl.querySelectorAll('.fchip').forEach(f=>{
+  const on=f.dataset.cat===activeCat; f.classList.toggle('on',on);
+  f.style.background=on?CATS[f.dataset.cat].color:''; f.style.color=on?'#0a0e1a':'';
+});}
+document.getElementById('clearFilters').onclick=()=>{activeCat=null;query='';searchEl.value='';regionFilter=null;syncFilters();renderList();};
+searchEl.addEventListener('input',()=>{query=searchEl.value.toLowerCase().trim();regionFilter=null;renderList();});
+
+let regionFilter=null;
+function norm(s){return s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
+function filtered(){
+  const q=norm(query);
+  return STRUCTURES.filter(s=>{
+    if(activeCat && s.cat!==activeCat) return false;
+    if(regionFilter && s.region3d!==regionFilter) return false;
+    if(q && !(norm(s.name).includes(q)||norm(s.def).includes(q)||norm(s.fun).includes(q))) return false;
+    return true;
+  });
+}
+function renderList(){
+  const items=filtered();
+  listCount.textContent=`${items.length} de ${STRUCTURES.length}`;
+  // agrupa por categoría
+  const groups={};
+  items.forEach(s=>{(groups[s.cat]=groups[s.cat]||[]).push(s);});
+  listEl.innerHTML='';
+  Object.keys(CATS).forEach(catKey=>{
+    const arr=groups[catKey]; if(!arr||!arr.length)return;
+    const h=document.createElement('div'); h.className='groupHdr'; h.textContent=CATS[catKey].label; listEl.appendChild(h);
+    arr.forEach(s=>{
+      const row=document.createElement('div'); row.className='row'+(selectedStruct&&selectedStruct.id===s.id?' sel':''); row.dataset.id=s.id;
+      row.innerHTML=`<span class="d" style="background:${CATS[s.cat].color}"></span>
+        <div><div class="nm">${s.name}</div><div class="sub">${REGIONS[s.region3d]?REGIONS[s.region3d].label:regionName(s.region3d)}</div></div>`;
+      row.onclick=()=>selectStructure(s.id,true);
+      listEl.appendChild(row);
+    });
+  });
+  if(!items.length){ listEl.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted2)">Sin resultados. Prueba otra búsqueda.</div>'; }
+}
+function regionName(rk){return {pares:'Pares craneales',periferico:'Sistema endocrino periférico'}[rk]||rk;}
+
+/* ---- ficha / selección ---- */
+const fichaCard=document.getElementById('fichaCard');
+function structuresInRegion(rk){return STRUCTURES.filter(s=>s.region3d===rk);}
+
+function selectRegion(rk){
+  selectedRegion=rk; selectedStruct=null; refreshEmissive();
+  regionFilter=rk; activeCat=null; query=''; searchEl.value=''; syncFilters(); renderList();
+  const R=REGIONS[rk], arr=structuresInRegion(rk);
+  fichaCard.innerHTML=`<button class="x" title="Cerrar">×</button>
+    <span class="catbadge" style="background:${hexa(R.color,.18)};color:${R.color}">Región 3D</span>
+    <h3 style="color:${R.color}">${R.label}</h3>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 6px">${arr.length} estructura(s) en esta región. Elige una para ver su ficha:</p>
+    <div class="regchips">${arr.map(s=>`<button class="rchip" data-id="${s.id}">${s.name}</button>`).join('')}</div>`;
+  fichaCard.classList.add('show');
+  fichaCard.querySelector('.x').onclick=closeFicha;
+  fichaCard.querySelectorAll('.rchip').forEach(b=>b.onclick=()=>selectStructure(b.dataset.id,false));
+}
+function selectStructure(id, fromList){
+  const s=STRUCTURES.find(x=>x.id===id); if(!s)return;
+  selectedStruct=s; selectedRegion=REGIONS[s.region3d]?s.region3d:null; refreshEmissive();
+  const col=CATS[s.cat].color;
+  const noMesh=!REGIONS[s.region3d];
+  fichaCard.innerHTML=`<button class="x" title="Cerrar">×</button>
+    <span class="catbadge" style="background:${hexa(col,.18)};color:${col}">${CATS[s.cat].label}</span>
+    <h3 style="color:${col}">${s.name}</h3>
+    <div class="fblock"><div class="l">📍 Qué es</div><p>${s.def}</p></div>
+    <div class="fblock"><div class="l">⚙️ Función</div><p>${s.fun}</p></div>
+    <div class="fblock les"><div class="l">⚠️ Si se lesiona…</div><p>${s.les}</p></div>
+    <div class="fichaActions">
+      ${noMesh?'<span style="color:var(--muted2);font-size:12px">Sin representación 3D (estructura periférica)</span>'
+        :`<button class="btn sm" id="isoBtn">${isolate?'Mostrar todo':'Aislar en 3D'}</button>
+          <button class="btn sm" id="regBtn">Ver región</button>`}
+    </div>`;
+  fichaCard.classList.add('show');
+  fichaCard.querySelector('.x').onclick=closeFicha;
+  const iso=fichaCard.querySelector('#isoBtn'); if(iso)iso.onclick=()=>{isolate=!isolate;refreshEmissive();selectStructure(id,fromList);};
+  const rb=fichaCard.querySelector('#regBtn'); if(rb)rb.onclick=()=>selectRegion(s.region3d);
+  // marca la fila
+  listEl.querySelectorAll('.row').forEach(r=>r.classList.toggle('sel',r.dataset.id===id));
+  const row=listEl.querySelector(`.row[data-id="${id}"]`);
+  if(row) row.scrollIntoView({block:'nearest'});
+}
+function closeFicha(){fichaCard.classList.remove('show');selectedRegion=null;selectedStruct=null;isolate=false;refreshEmissive();}
+function hexa(hex,a){const c=new THREE.Color(hex);return`rgba(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)},${a})`;}
+
+renderList();
+
+/* ============================================================
+   TABS
+   ============================================================ */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    const v=t.dataset.view;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+    document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.dataset.view===v));
+    if(v==='stage'&&renderer)onResize();
+  };
+});
+function onResize(){ if(!renderer)return;
+  const w=canvasWrap.clientWidth,h=canvasWrap.clientHeight;
+  renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',onResize);
+
+/* ============================================================
+   QUIZ (generador dinámico)
+   ============================================================ */
+const quizEl=document.getElementById('quiz');
+let quizCfg={n:15, cat:null}, order=[], qi=0, score=0, answered=false, wrongLog=[];
+
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function sample(arr,n,exclude){const pool=arr.filter(x=>x!==exclude);return shuffle(pool).slice(0,n);}
+
+function renderSetup(){
+  quizEl.innerHTML=`
+  <div class="qCard setup">
+    <h2>📝 Pon a prueba tu neuroanatomía</h2>
+    <p class="lede">Preguntas generadas a partir de las <b>${STRUCTURES.length} estructuras</b> de tu temario: función, definición, lesión y sistema. Cada intento baraja preguntas y opciones.</p>
+    <div class="field"><span>¿Cuántas preguntas?</span>
+      <div class="pills" id="pN">
+        ${[10,15,25,40].map(n=>`<button class="pill${n===quizCfg.n?' on':''}" data-n="${n}">${n}</button>`).join('')}
+        <button class="pill${quizCfg.n==='all'?' on':''}" data-n="all">Maratón (todas)</button>
+      </div></div>
+    <div class="field"><span>¿Qué sistema quieres repasar?</span>
+      <div class="pills" id="pC">
+        <button class="pill${!quizCfg.cat?' on':''}" data-c="">Todos</button>
+        ${Object.keys(CATS).map(k=>`<button class="pill${quizCfg.cat===k?' on':''}" data-c="${k}">${CATS[k].label.split(' y ')[0]}</button>`).join('')}
+      </div></div>
+    <button class="btn primary startBtn" id="startQuiz">Empezar quiz →</button>
+  </div>`;
+  quizEl.querySelector('#pN').onclick=e=>{const b=e.target.closest('.pill');if(!b)return;
+    quizCfg.n=b.dataset.n==='all'?'all':parseInt(b.dataset.n);renderSetup();};
+  quizEl.querySelector('#pC').onclick=e=>{const b=e.target.closest('.pill');if(!b)return;
+    quizCfg.cat=b.dataset.c||null;renderSetup();};
+  quizEl.querySelector('#startQuiz').onclick=startQuiz;
+}
+
+function makeQuestion(s, pool){
+  const type=shuffle(['fun','def','les','cat'])[0];
+  const sameCat=pool.filter(x=>x.cat===s.cat && x.id!==s.id);
+  const others=sameCat.length>=3?sameCat:pool.filter(x=>x.id!==s.id);
+  if(type==='cat'){
+    const wrongCats=sample(Object.keys(CATS).filter(k=>k!==s.cat),3);
+    const opts=shuffle([{t:CATS[s.cat].label,ok:true},...wrongCats.map(k=>({t:CATS[k].label,ok:false}))]);
+    return {type:'Sistema', q:`¿A qué sistema pertenece <span class="hl">${s.name}</span>?`, opts, ex:`${s.name} pertenece a: ${CATS[s.cat].label}.`};
+  }
+  if(type==='def'){
+    const opts=shuffle([{t:s.name,ok:true},...sample(others,3).map(x=>({t:x.name,ok:false}))]);
+    return {type:'Identifica la estructura', q:`¿Qué estructura corresponde a esta descripción?<br><i style="color:var(--muted);font-weight:500">«${s.def}»</i>`, opts, ex:`Es <b>${s.name}</b>. ${s.fun}`};
+  }
+  const field=type==='fun'?'fun':'les';
+  const label=type==='fun'?'función principal':'consecuencia de una lesión';
+  const opts=shuffle([{t:s[field],ok:true},...sample(others,3).map(x=>({t:x[field],ok:false}))]);
+  return {type: type==='fun'?'Función':'Lesión', q:`¿Cuál es la <span class="hl">${label}</span> de <span class="hl">${s.name}</span>?`, opts, ex:`Correcto: ${s[field]}`};
+}
+function startQuiz(){
+  let pool=STRUCTURES.filter(s=> quizCfg.cat? s.cat===quizCfg.cat : true);
+  const n=quizCfg.n==='all'?pool.length:Math.min(quizCfg.n,pool.length);
+  const chosen=shuffle(pool).slice(0,n);
+  order=chosen.map(s=>makeQuestion(s,pool));
+  qi=0;score=0;answered=false;wrongLog=[];
+  renderQuestion();
+}
+function renderQuestion(){
+  const it=order[qi], pct=Math.round((qi/order.length)*100), L=['A','B','C','D'];
+  quizEl.innerHTML=`
+  <div class="qCard">
+    <div class="quizTop"><span class="qcount">Pregunta ${qi+1} de ${order.length}</span><span class="qscore">Aciertos: ${score}</span></div>
+    <div class="progress"><i style="width:${pct}%"></i></div>
+    <div class="qtype">${it.type}</div>
+    <div class="question">${it.q}</div>
+    <div class="options" id="opts">
+      ${it.opts.map((o,i)=>`<button class="opt" data-i="${i}"><span class="mk">${L[i]}</span><span>${o.t}</span></button>`).join('')}
+    </div>
+    <div class="explain" id="explain"></div>
+    <div class="quizNav" id="nav"><button class="btn" id="quit">✕ Salir</button><span></span></div>
+  </div>`;
+  answered=false;
+  quizEl.querySelectorAll('.opt').forEach(b=>b.onclick=()=>answer(parseInt(b.dataset.i)));
+  quizEl.querySelector('#quit').onclick=renderSetup;
+}
+function answer(i){
+  if(answered)return; answered=true;
+  const it=order[qi], opts=quizEl.querySelectorAll('.opt');
+  opts.forEach(o=>o.disabled=true);
+  const ci=it.opts.findIndex(o=>o.ok);
+  opts[ci].classList.add('correct');
+  const ok=it.opts[i].ok;
+  if(ok)score++; else {opts[i].classList.add('wrong'); wrongLog.push(it);}
+  quizEl.querySelector('.qscore').textContent='Aciertos: '+score;
+  const ex=quizEl.querySelector('#explain'); ex.className='explain show '+(ok?'ok':'no');
+  ex.innerHTML=(ok?'✅ <b>¡Correcto!</b> ':'❌ <b>Incorrecto.</b> ')+it.ex;
+  const nav=quizEl.querySelector('#nav'); nav.innerHTML='<button class="btn" id="quit">✕ Salir</button>';
+  nav.querySelector('#quit').onclick=renderSetup;
+  const last=qi===order.length-1;
+  const nb=document.createElement('button'); nb.className='btn primary'; nb.textContent=last?'Ver resultado →':'Siguiente →';
+  nb.onclick=()=>{if(last)showResult();else{qi++;renderQuestion();}};
+  nav.appendChild(nb);
+}
+function showResult(){
+  const total=order.length, pct=Math.round(score/total*100);
+  let emo,msg;
+  if(pct===100){emo='🏆';msg='¡Perfecto! Dominas el temario.';}
+  else if(pct>=80){emo='🎉';msg='¡Excelente! Un repaso de los fallos y listo.';}
+  else if(pct>=60){emo='👏';msg='Buen nivel. Revisa las estructuras marcadas abajo.';}
+  else if(pct>=40){emo='📚';msg='Vas avanzando. Explora el 3D y vuelve a intentarlo.';}
+  else{emo='💪';msg='A repasar en el modo 3D: cada estructura tiene su ficha.';}
+  quizEl.innerHTML=`
+  <div class="qCard result">
+    <div style="font-size:50px">${emo}</div>
+    <div class="big">${score} / ${total}</div>
+    <p style="color:var(--muted)"><b>${pct}% de aciertos.</b><br>${msg}</p>
+    ${wrongLog.length?`<div class="review"><div style="font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted2);margin-bottom:4px">Para repasar (${wrongLog.length})</div>
+      ${wrongLog.map(w=>`<div class="ri">${w.ex}</div>`).join('')}</div>`:''}
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:22px;flex-wrap:wrap">
+      <button class="btn primary" id="again">🔁 Nuevo quiz</button>
+      <button class="btn" id="toBrain">🧠 Volver al 3D</button>
+    </div>
+  </div>`;
+  quizEl.querySelector('#again').onclick=renderSetup;
+  quizEl.querySelector('#toBrain').onclick=()=>document.querySelector('.tab[data-view="stage"]').click();
+}
+renderSetup();
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+try{ initScene(); }catch(err){ console.error(err); showLoadError(); }
+function showLoadError(){
+  const s=document.getElementById('spin'); if(s)s.style.display='none';
+  document.getElementById('ovTitle').textContent='No se pudo cargar el motor 3D';
+  document.getElementById('ovText').innerHTML='Necesitas conexión a internet para descargar Three.js. El Quiz y el Atlas funcionan igual: cambia de pestaña.';
+}
+setTimeout(()=>{if(!booted)showLoadError();},8000);
+</script>

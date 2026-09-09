@@ -1,0 +1,8 @@
+# Material de estudio personal (no publicar)
+*.xlsx
+*.xls
+*.csv
+
+# Sistema
+Thumbs.db
+.DS_Store
