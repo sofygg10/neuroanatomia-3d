@@ -18,8 +18,20 @@ Un cerebro 3D que se **desarma/arma**, con **98 estructuras** documentadas y un 
   tronco encefálico, cerebelo, sustancia blanca, los 12 pares craneales y el sistema endocrino.
 - **Buscador y filtros** por sistema anatómico.
 - **Etiquetas**, modo **aislar** una estructura y **resaltado** al pasar el cursor.
+- **Mapa mental interactivo**: árbol *Cerebro → sistema → estructura* con nodos clicables,
+  colores por sistema, expandir/contraer, zoom y arrastre, y **bibliografía citada por sistema**.
+  Cada estructura enlaza con su ficha y su botón *Ver en 3D*.
 - **Quiz auto-generado y configurable**: 10 / 15 / 25 / 40 / maratón, por sistema o todos.
   4 tipos de pregunta (función, definición, lesión, sistema) con corrección y lista de repaso.
+
+## 📚 Fuentes
+
+Las definiciones, funciones y efectos de lesión se apoyan en los manuales de referencia de
+neuroanatomía y neurociencia: **Kandel** (*Principios de Neurociencia*), **Purves** (*Neuroscience*),
+**Snell** (*Neuroanatomía clínica*), **Nolte** (*El cerebro humano*), **Afifi & Bergman**,
+**Bear, Connors & Paradiso**, **Crossman & Neary** y **Haines**. La bibliografía completa aparece
+en la pestaña **Mapa mental**. Es material educativo: no es una citación dato a dato, así que
+contrasta siempre con tu bibliografía oficial.
 
 ## 🚀 Uso local
 

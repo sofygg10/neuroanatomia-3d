@@ -146,6 +146,50 @@
   .groupHdr{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);
     margin:14px 8px 6px;font-weight:700}
 
+  /* ---------------- Mapa mental ---------------- */
+  #mapaView{height:100%;display:flex;flex-direction:column;min-height:0}
+  .mapaToolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:10px 15px;border-bottom:1px solid var(--stroke);background:rgba(8,12,22,.5)}
+  .mapaToolbar .searchbox{margin:0;flex:none;width:min(260px,55vw)}
+  .mapaFilters{display:flex;flex-wrap:wrap;gap:6px}
+  .mapaSpacer{flex:1;min-width:8px}
+  .mapaBody{flex:1;display:flex;min-height:0}
+  .mapaCanvas{flex:1;overflow:auto;position:relative;cursor:grab;
+    background:radial-gradient(900px 600px at 30% 0%,rgba(92,124,255,.06),transparent 60%)}
+  .mapaCanvas.grabbing{cursor:grabbing}
+  .mapaStage{position:relative;transform-origin:0 0}
+  .mapaInner{position:absolute;top:0;left:0;transform-origin:0 0}
+  .mapaEdges{position:absolute;top:0;left:0;overflow:visible}
+  .mapaEdges path{fill:none;stroke-width:2}
+  .mnode{position:absolute;transform:translateY(-50%);
+    border:1px solid var(--stroke);border-radius:11px;padding:7px 11px;cursor:pointer;
+    background:var(--glass2);backdrop-filter:blur(4px);user-select:none;
+    transition:border-color .13s,transform .13s,box-shadow .13s;box-shadow:0 3px 12px rgba(0,0,0,.35)}
+  .mnode:hover{border-color:var(--accent);transform:translateY(-50%) translateX(3px);box-shadow:0 6px 18px rgba(0,0,0,.45)}
+  .mnode .mtitle{font-size:12.5px;font-weight:600;line-height:1.25;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .mnode .msub{font-size:10.5px;color:var(--muted2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mnode .mrow{display:flex;align-items:center;gap:7px}
+  .mnode .caret{font-size:11px;color:var(--muted);width:10px;flex:none}
+  .mnode .cdot{width:10px;height:10px;border-radius:3px;flex:none}
+  .mnode.root{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;text-align:center}
+  .mnode.root .msub{color:rgba(255,255,255,.82)}
+  .mnode.system{background:rgba(20,29,51,.92)}
+  .mnode.struct{border-left:3px solid var(--accent);background:rgba(16,23,42,.86)}
+  .mnode.struct.sel{border-color:#fff;box-shadow:0 0 0 2px var(--accent),0 6px 18px rgba(0,0,0,.5)}
+  .mapaSide{width:340px;flex:none;border-left:1px solid var(--stroke);
+    background:rgba(9,13,24,.72);backdrop-filter:blur(12px);overflow-y:auto;padding:16px 16px 26px}
+  .mapaSide h3{margin:0 0 6px}
+  .mapaSide .sideLede{color:var(--muted);line-height:1.55;font-size:13px;margin:0 0 14px}
+  .mapaSrc{margin-top:14px;border-top:1px solid var(--stroke);padding-top:12px}
+  .mapaSrc .l{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.4px;
+    text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .biblio{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px}
+  .biblio li{font-size:12px;line-height:1.45;color:#cfd8ee}
+  .biblio li i{color:#eaf0ff}
+  .srcNote{font-size:11.5px;color:var(--muted2);line-height:1.5;margin:12px 0 0;font-style:italic}
+  .mapaSideActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+
   /* ---------------- Quiz ---------------- */
   #quiz{height:100%;overflow-y:auto;display:grid;place-items:start center;padding:30px 18px}
   .qCard{width:min(700px,100%);background:var(--glass);border:1px solid var(--stroke);
@@ -204,6 +248,8 @@
     .fichaCard{bottom:auto;top:12px}
     .counter{display:none}
     input[type=range]{width:96px}
+    .mapaBody{flex-direction:column}
+    .mapaSide{width:auto;flex:none;border-left:none;border-top:1px solid var(--stroke);max-height:42%}
   }
 </style>
 
@@ -214,6 +260,7 @@
   </div>
   <div class="tabs">
     <button class="tab active" data-view="stage">🧩 Explorar 3D</button>
+    <button class="tab" data-view="mapa">🗺️ Mapa mental</button>
     <button class="tab" data-view="quiz">📝 Quiz</button>
   </div>
   <div class="spacer"></div>
@@ -276,6 +323,34 @@
         </div>
         <div class="list" id="list"></div>
       </aside>
+    </div>
+  </section>
+
+  <!-- ============ MAPA MENTAL ============ -->
+  <section class="view" data-view="mapa">
+    <div id="mapaView">
+      <div class="mapaToolbar">
+        <div class="searchbox">
+          <span>🔍</span>
+          <input id="mapaSearch" type="text" placeholder="Buscar en el mapa…" />
+        </div>
+        <div class="mapaFilters" id="mapaFilters"></div>
+        <div class="mapaSpacer"></div>
+        <button id="mapaExpand" class="btn sm">Expandir todo</button>
+        <button id="mapaCollapse" class="btn sm">Contraer todo</button>
+        <div class="sep"></div>
+        <button id="mapaZoomOut" class="btn sm" title="Alejar">−</button>
+        <button id="mapaZoomReset" class="btn sm" title="Restablecer zoom">100%</button>
+        <button id="mapaZoomIn" class="btn sm" title="Acercar">+</button>
+      </div>
+      <div class="mapaBody">
+        <div class="mapaCanvas" id="mapaCanvas">
+          <div class="mapaStage" id="mapaStage">
+            <div class="mapaInner" id="mapaInner"></div>
+          </div>
+        </div>
+        <aside class="mapaSide" id="mapaSide"></aside>
+      </div>
     </div>
   </section>
 
@@ -670,6 +745,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
     document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.dataset.view===v));
     if(v==='stage'&&renderer)onResize();
+    if(v==='mapa')renderMapa();
   };
 });
 function onResize(){ if(!renderer)return;
@@ -677,6 +753,189 @@ function onResize(){ if(!renderer)return;
   renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
 }
 window.addEventListener('resize',onResize);
+
+/* ============================================================
+   MAPA MENTAL (árbol interactivo + fuentes)
+   ============================================================ */
+/* Bibliografía real de referencia (manuales estándar de neuroanatomía). */
+const SOURCES = [
+  {key:'kandel', full:'Kandel ER, Schwartz JH, Jessell TM, Siegelbaum SA, Hudspeth AJ. <i>Principios de Neurociencia</i> (Principles of Neural Science). 5.ª ed. McGraw-Hill; 2013.'},
+  {key:'purves', full:'Purves D, Augustine GJ, Fitzpatrick D, et al. <i>Neuroscience</i>. 6.ª ed. Oxford University Press / Sinauer; 2018.'},
+  {key:'snell', full:'Snell RS. <i>Neuroanatomía clínica</i>. 7.ª ed. Wolters Kluwer / Lippincott Williams & Wilkins; 2010.'},
+  {key:'nolte', full:'Nolte J. <i>El cerebro humano: introducción a su anatomía funcional</i>. 6.ª ed. Elsevier / Mosby; 2010.'},
+  {key:'afifi', full:'Afifi AK, Bergman RA. <i>Neuroanatomía funcional: texto y atlas</i>. 2.ª ed. McGraw-Hill; 2006.'},
+  {key:'bear', full:'Bear MF, Connors BW, Paradiso MA. <i>Neurociencia: la exploración del cerebro</i>. 4.ª ed. Wolters Kluwer; 2016.'},
+  {key:'crossman', full:'Crossman AR, Neary D. <i>Neuroanatomía: texto y atlas en color</i>. 5.ª ed. Elsevier; 2015.'},
+  {key:'haines', full:'Haines DE. <i>Principios de neurociencia: aplicaciones básicas y clínicas</i>. 4.ª ed. Elsevier; 2014.'}
+];
+/* Qué manuales cubren cada sistema anatómico (cat de STRUCTURES). */
+const CAT_SOURCES = {
+  corteza:['kandel','purves','bear','nolte'],
+  giros:['snell','nolte','crossman'],
+  ganglios:['kandel','purves','afifi'],
+  talamo:['kandel','snell','nolte'],
+  limbico:['kandel','purves','bear'],
+  tronco:['snell','nolte','afifi','haines'],
+  cerebelo:['kandel','purves','snell'],
+  blanca:['nolte','crossman','snell'],
+  pares:['snell','nolte','crossman','haines'],
+  endocrino:['kandel','purves','bear']
+};
+
+const mapaState={expanded:new Set(), query:'', activeCat:null, zoom:1, W:0, H:0, sel:null};
+const mapaInner=document.getElementById('mapaInner');
+const mapaStage=document.getElementById('mapaStage');
+const mapaCanvas=document.getElementById('mapaCanvas');
+const mapaSide=document.getElementById('mapaSide');
+const mapaFiltersEl=document.getElementById('mapaFilters');
+const mapaNorm=s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const edgePath=(x1,y1,x2,y2)=>{const dx=(x2-x1)*0.5;return `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;};
+
+function applyMapaZoom(){
+  const z=mapaState.zoom;
+  mapaInner.style.width=mapaState.W+'px'; mapaInner.style.height=mapaState.H+'px';
+  mapaInner.style.transform='scale('+z+')';
+  mapaStage.style.width=(mapaState.W*z)+'px'; mapaStage.style.height=(mapaState.H*z)+'px';
+  const zr=document.getElementById('mapaZoomReset'); if(zr)zr.textContent=Math.round(z*100)+'%';
+}
+function setMapaZoom(z){ mapaState.zoom=Math.min(1.8,Math.max(0.4,z)); applyMapaZoom(); }
+
+function renderMapa(){
+  const q=mapaNorm(mapaState.query);
+  const ROW_H=58, TOP=30;
+  const X={root:20, sys:250, struct:540}, W={root:150, sys:210, struct:250};
+  let slot=0, svgPaths='', nodesHTML='', totalVisible=0;
+  const rootCenters=[];
+  Object.keys(CATS).forEach(catKey=>{
+    if(mapaState.activeCat && mapaState.activeCat!==catKey) return;
+    let structs=STRUCTURES.filter(s=>s.cat===catKey);
+    if(q) structs=structs.filter(s=>mapaNorm(s.name).includes(q)||mapaNorm(s.def).includes(q)||mapaNorm(s.fun).includes(q));
+    if(!structs.length) return;
+    totalVisible+=structs.length;
+    const col=CATS[catKey].color;
+    const expanded=mapaState.expanded.has(catKey)||!!q;
+    let sysY;
+    if(expanded){
+      const ys=[];
+      structs.forEach(s=>{
+        const y=slot*ROW_H+ROW_H/2; slot++; ys.push(y);
+        const region=REGIONS[s.region3d]?REGIONS[s.region3d].label:regionName(s.region3d);
+        const sel=mapaState.sel===s.id?' sel':'';
+        nodesHTML+=`<div class="mnode struct${sel}" data-id="${s.id}" style="left:${X.struct}px;top:${TOP+y}px;width:${W.struct}px;border-left-color:${col}">
+          <div class="mtitle">${s.name}</div><div class="msub">${region}</div></div>`;
+      });
+      sysY=(ys[0]+ys[ys.length-1])/2;
+      ys.forEach(y=>{ svgPaths+=`<path d="${edgePath(X.sys+W.sys, TOP+sysY, X.struct, TOP+y)}" stroke="${hexa(col,.45)}"/>`; });
+    } else {
+      sysY=slot*ROW_H+ROW_H/2; slot++;
+    }
+    rootCenters.push({y:sysY,col});
+    nodesHTML+=`<div class="mnode system" data-cat="${catKey}" style="left:${X.sys}px;top:${TOP+sysY}px;width:${W.sys}px;border-color:${hexa(col,.55)}">
+      <div class="mrow"><span class="caret">${expanded?'▾':'▸'}</span><span class="cdot" style="background:${col}"></span><span class="mtitle">${CATS[catKey].label}</span></div>
+      <div class="msub">${structs.length} estructura(s)</div></div>`;
+  });
+  if(!rootCenters.length){
+    mapaState.W=400; mapaState.H=200; applyMapaZoom();
+    mapaInner.innerHTML=`<div style="padding:46px 30px;color:var(--muted2);font-size:14px">Sin resultados para “${mapaState.query}”.</div>`;
+    return;
+  }
+  const rootY=(rootCenters[0].y+rootCenters[rootCenters.length-1].y)/2;
+  rootCenters.forEach(rc=>{ svgPaths+=`<path d="${edgePath(X.root+W.root, TOP+rootY, X.sys, TOP+rc.y)}" stroke="${hexa(rc.col,.4)}"/>`; });
+  nodesHTML+=`<div class="mnode root" data-root="1" style="left:${X.root}px;top:${TOP+rootY}px;width:${W.root}px">
+    <div class="mtitle">🧠 Cerebro</div><div class="msub">${totalVisible} estructura(s)</div></div>`;
+  const contentW=X.struct+W.struct+30, contentH=Math.max(slot,1)*ROW_H+TOP*2;
+  mapaState.W=contentW; mapaState.H=contentH;
+  mapaInner.innerHTML=`<svg class="mapaEdges" width="${contentW}" height="${contentH}" viewBox="0 0 ${contentW} ${contentH}">${svgPaths}</svg>${nodesHTML}`;
+  applyMapaZoom();
+}
+
+function srcList(keys){return `<ul class="biblio">${(keys||[]).map(k=>{const s=SOURCES.find(x=>x.key===k);return s?`<li>${s.full}</li>`:'';}).join('')}</ul>`;}
+
+function renderMapaSideDefault(){
+  mapaState.sel=null;
+  mapaInner.querySelectorAll('.mnode.struct.sel').forEach(n=>n.classList.remove('sel'));
+  mapaSide.innerHTML=`
+    <h3>🗺️ Mapa mental del cerebro</h3>
+    <p class="sideLede">Explora las <b>${STRUCTURES.length} estructuras</b> agrupadas por sistema. Haz clic en un sistema para desplegar sus estructuras, y en una estructura para ver su ficha y sus fuentes. Arrastra para desplazarte y usa el zoom.</p>
+    <div class="mapaSrc">
+      <div class="l">📚 Bibliografía de referencia</div>
+      <ol class="biblio">${SOURCES.map(s=>`<li>${s.full}</li>`).join('')}</ol>
+      <p class="srcNote">Herramienta educativa. Las definiciones, funciones y efectos de lesión se basan en estos manuales de referencia de neuroanatomía y neurociencia; no proceden de una única fuente citada dato a dato. Contrasta siempre con tu bibliografía oficial.</p>
+    </div>`;
+}
+
+function showMapaDetail(id){
+  const s=STRUCTURES.find(x=>x.id===id); if(!s)return;
+  mapaState.sel=id;
+  mapaInner.querySelectorAll('.mnode.struct').forEach(n=>n.classList.toggle('sel',n.dataset.id===id));
+  const col=CATS[s.cat].color;
+  const has3d=!!REGIONS[s.region3d];
+  mapaSide.innerHTML=`
+    <span class="catbadge" style="background:${hexa(col,.18)};color:${col}">${CATS[s.cat].label}</span>
+    <h3 style="color:${col}">${s.name}</h3>
+    <div class="fblock"><div class="l">📍 Qué es</div><p>${s.def}</p></div>
+    <div class="fblock"><div class="l">⚙️ Función</div><p>${s.fun}</p></div>
+    <div class="fblock les"><div class="l">⚠️ Si se lesiona…</div><p>${s.les}</p></div>
+    <div class="mapaSrc">
+      <div class="l">📚 Fuentes de este sistema</div>
+      ${srcList(CAT_SOURCES[s.cat])}
+      <p class="srcNote">Manuales de referencia que cubren “${CATS[s.cat].label}”. Consulta la bibliografía completa para las ediciones.</p>
+    </div>
+    <div class="mapaSideActions">
+      ${has3d?`<button class="btn sm primary" id="mapaTo3D">🧠 Ver en 3D</button>`:`<span style="color:var(--muted2);font-size:12px">Estructura periférica (sin 3D)</span>`}
+      <button class="btn sm" id="mapaAllSrc">📚 Toda la bibliografía</button>
+    </div>`;
+  const b=mapaSide.querySelector('#mapaTo3D'); if(b)b.onclick=()=>{document.querySelector('.tab[data-view="stage"]').click();selectStructure(id,true);};
+  const a=mapaSide.querySelector('#mapaAllSrc'); if(a)a.onclick=renderMapaSideDefault;
+}
+
+function buildMapaFilters(){
+  mapaFiltersEl.innerHTML=Object.keys(CATS).map(k=>`<button class="fchip" data-c="${k}"><span class="d" style="background:${CATS[k].color}"></span>${CATS[k].label.split(' y ')[0]}</button>`).join('');
+  mapaFiltersEl.querySelectorAll('.fchip').forEach(ch=>{
+    ch.onclick=()=>{ const k=ch.dataset.c; mapaState.activeCat=mapaState.activeCat===k?null:k; updateMapaChips(); renderMapa(); };
+  });
+  updateMapaChips();
+}
+function updateMapaChips(){
+  mapaFiltersEl.querySelectorAll('.fchip').forEach(ch=>{
+    const on=mapaState.activeCat===ch.dataset.c;
+    ch.classList.toggle('on',on);
+    ch.style.background=on?hexa(CATS[ch.dataset.c].color,.9):'';
+    ch.style.color=on?'#0b1020':'';
+    ch.style.borderColor=on?'transparent':'';
+  });
+}
+
+/* interacción: clic en nodos */
+let panMoved=false;
+mapaInner.addEventListener('click',e=>{
+  if(panMoved){panMoved=false;return;}
+  const sys=e.target.closest('.mnode.system');
+  if(sys){ const k=sys.dataset.cat; if(mapaState.expanded.has(k))mapaState.expanded.delete(k); else mapaState.expanded.add(k); renderMapa(); return; }
+  const st=e.target.closest('.mnode.struct');
+  if(st){ showMapaDetail(st.dataset.id); return; }
+  const rt=e.target.closest('.mnode.root');
+  if(rt){ const keys=Object.keys(CATS); const all=keys.every(k=>mapaState.expanded.has(k)); if(all)mapaState.expanded.clear(); else keys.forEach(k=>mapaState.expanded.add(k)); renderMapa(); }
+});
+
+/* pan arrastrando */
+let panning=false,panSX=0,panSY=0,panL=0,panT=0;
+mapaCanvas.addEventListener('mousedown',e=>{ if(e.button!==0)return; panning=true; panMoved=false; panSX=e.clientX; panSY=e.clientY; panL=mapaCanvas.scrollLeft; panT=mapaCanvas.scrollTop; });
+window.addEventListener('mousemove',e=>{ if(!panning)return; const dx=e.clientX-panSX,dy=e.clientY-panSY; if(Math.abs(dx)>4||Math.abs(dy)>4){panMoved=true;mapaCanvas.classList.add('grabbing');} mapaCanvas.scrollLeft=panL-dx; mapaCanvas.scrollTop=panT-dy; });
+window.addEventListener('mouseup',()=>{ panning=false; mapaCanvas.classList.remove('grabbing'); });
+mapaCanvas.addEventListener('wheel',e=>{ if(!e.ctrlKey)return; e.preventDefault(); setMapaZoom(mapaState.zoom*(e.deltaY<0?1.1:0.9)); },{passive:false});
+
+/* toolbar */
+document.getElementById('mapaSearch').addEventListener('input',e=>{ mapaState.query=e.target.value; renderMapa(); });
+document.getElementById('mapaExpand').onclick=()=>{ Object.keys(CATS).forEach(k=>mapaState.expanded.add(k)); renderMapa(); };
+document.getElementById('mapaCollapse').onclick=()=>{ mapaState.expanded.clear(); renderMapa(); };
+document.getElementById('mapaZoomIn').onclick=()=>setMapaZoom(mapaState.zoom*1.15);
+document.getElementById('mapaZoomOut').onclick=()=>setMapaZoom(mapaState.zoom*0.87);
+document.getElementById('mapaZoomReset').onclick=()=>setMapaZoom(1);
+
+buildMapaFilters();
+renderMapaSideDefault();
+renderMapa();
 
 /* ============================================================
    QUIZ (generador dinámico)
