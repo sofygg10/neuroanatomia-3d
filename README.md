@@ -1,7 +1,7 @@
 # 🧠 NeuroLab 3D · Atlas de neuroanatomía interactivo
 
 Aplicación web interactiva para estudiar **neuroanatomía** (pensada para estudiantes de **psicología**).
-Un cerebro 3D que se **desarma/arma**, con **98 estructuras** documentadas y un **quiz** configurable.
+Un cerebro 3D que se **desarma/arma**, con **112 estructuras** documentadas y un **quiz** configurable.
 
 ## 🔗 Ver en línea
 
@@ -13,9 +13,10 @@ Un cerebro 3D que se **desarma/arma**, con **98 estructuras** documentadas y un 
 ## ✨ Características
 
 - **Modelo 3D interactivo** con 16 regiones que se desarman, giran y se pueden **cortar** (sagital / coronal / axial) para ver el interior.
-- **Atlas de 98 estructuras** — cada una con **definición**, **función** y **qué pasa si se lesiona**:
+- **Atlas de 112 estructuras** — cada una con **definición**, **función** y **qué pasa si se lesiona**:
   áreas de Brodmann, giros y surcos, ganglios basales, núcleos talámicos, sistema límbico,
-  tronco encefálico, cerebelo, sustancia blanca, los 12 pares craneales y el sistema endocrino.
+  tronco encefálico, cerebelo, sustancia blanca, los 12 pares craneales, el sistema endocrino,
+  las meninges, el sistema ventricular (LCR) y la médula espinal.
 - **Buscador y filtros** por sistema anatómico.
 - **Etiquetas**, modo **aislar** una estructura y **resaltado** al pasar el cursor.
 - **Mapa mental interactivo**: árbol *Cerebro → sistema → estructura* con nodos clicables,
